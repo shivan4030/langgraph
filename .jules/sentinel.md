@@ -1,0 +1,4 @@
+## 2024-04-01 - [Sentinel: Fix SQL Injection in Postgres Store Migrations]
+**Vulnerability:** SQL injection risk due to string interpolation (f-strings) of table names in `_get_version` method of `BasePostgresStore` and `AsyncPostgresStore`.
+**Learning:** Even internal framework table names (like migrations tables) must be parameterized using secure methods to prevent vulnerabilities and establish secure coding patterns.
+**Prevention:** Always use `psycopg.sql.SQL` and `psycopg.sql.Identifier` when dynamically composing table or column names in `psycopg` queries, rather than standard string formatting.
