@@ -1,0 +1,4 @@
+## 2024-04-02 - SQL Injection vulnerability in pgvector dynamic table query
+**Vulnerability:** The internal helper method `_get_version(cur, table)` inside the PostgresStore adapter was dynamically constructing a CREATE TABLE and SELECT query using Python f-strings.
+**Learning:** Even internal helper methods should use parameterized query identifiers. Using standard string interpolation makes the method unsafe if called with untrusted inputs in the future. Also had to be careful since replacing the `f""` with `sql.SQL` required importing `sql` from `psycopg`. The `sql` variable name was also being used as a local variable for looping over migrations, so it had to be renamed to `migration_sql` to avoid UnboundLocalError and scope clashes.
+**Prevention:** Always use `psycopg.sql.SQL` and `psycopg.sql.Identifier` when dynamically formatting schema-level objects like table or column names, rather than string concatenation or f-strings.
