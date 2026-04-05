@@ -17,7 +17,7 @@ from langgraph.store.base import (
     SearchOp,
 )
 from langgraph.store.base.batch import AsyncBatchedBaseStore
-from psycopg import AsyncConnection, AsyncCursor, AsyncPipeline, Capabilities
+from psycopg import AsyncConnection, AsyncCursor, AsyncPipeline, Capabilities, sql
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -234,13 +234,19 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
 
         async def _get_version(cur: AsyncCursor[DictRow], table: str) -> int:
             await cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table} (
+                sql.SQL(
+                    """
+                CREATE TABLE IF NOT EXISTS {} (
                     v INTEGER PRIMARY KEY
                 )
             """
+                ).format(sql.Identifier(table))
             )
-            await cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            await cur.execute(
+                sql.SQL("SELECT v FROM {} ORDER BY v DESC LIMIT 1").format(
+                    sql.Identifier(table)
+                )
+            )
             row = cast(dict, await cur.fetchone())
             if row is None:
                 version = -1
@@ -250,8 +256,10 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
 
         async with self._cursor() as cur:
             version = await _get_version(cur, table="store_migrations")
-            for v, sql in enumerate(self.MIGRATIONS[version + 1 :], start=version + 1):
-                await cur.execute(sql)
+            for v, migration_sql in enumerate(
+                self.MIGRATIONS[version + 1 :], start=version + 1
+            ):
+                await cur.execute(migration_sql)
                 await cur.execute("INSERT INTO store_migrations (v) VALUES (%s)", (v,))
 
             if self.index_config:
@@ -259,11 +267,13 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
                 for v, migration in enumerate(
                     self.VECTOR_MIGRATIONS[version + 1 :], start=version + 1
                 ):
-                    sql = migration.sql
+                    if migration.condition and not migration.condition(self):
+                        continue
+                    v_sql = migration.sql
                     if migration.params:
                         params = {
-                            k: v(self) if v is not None and callable(v) else v
-                            for k, v in migration.params.items()
+                            k: val(self) if val is not None and callable(val) else val
+                            for k, val in migration.params.items()
                         }
                         if "dims" in params:
                             try:
@@ -286,8 +296,8 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
                                     f"Invalid index_type for pgvector: {it}"
                                 )
                             params["index_type"] = it
-                        sql = sql % params
-                    await cur.execute(sql)
+                        v_sql = v_sql % params
+                    await cur.execute(v_sql)
                     await cur.execute(
                         "INSERT INTO vector_migrations (v) VALUES (%s)", (v,)
                     )
