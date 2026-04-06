@@ -19,6 +19,7 @@ from langgraph.store.base import (
 from langgraph.store.base.batch import AsyncBatchedBaseStore
 from psycopg import AsyncConnection, AsyncCursor, AsyncPipeline, Capabilities
 from psycopg.rows import DictRow, dict_row
+from psycopg.sql import SQL, Identifier
 from psycopg_pool import AsyncConnectionPool
 
 from langgraph.checkpoint.postgres import _ainternal
@@ -234,13 +235,19 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
 
         async def _get_version(cur: AsyncCursor[DictRow], table: str) -> int:
             await cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table} (
+                SQL(
+                    """
+                CREATE TABLE IF NOT EXISTS {} (
                     v INTEGER PRIMARY KEY
                 )
             """
+                ).format(Identifier(table))
             )
-            await cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            await cur.execute(
+                SQL("SELECT v FROM {} ORDER BY v DESC LIMIT 1").format(
+                    Identifier(table)
+                )
+            )
             row = cast(dict, await cur.fetchone())
             if row is None:
                 version = -1
