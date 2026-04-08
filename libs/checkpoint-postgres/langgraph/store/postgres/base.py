@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+import re
 import threading
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
@@ -230,6 +231,25 @@ class PostgresIndexConfig(IndexConfig, total=False):
     - 'inner_product': Dot product
     - 'cosine': Cosine similarity
     """
+
+
+_FILTER_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+$")
+
+
+def _validate_filter_key(key: str) -> None:
+    """Validate that a filter key is safe and prevents unbounded parsing.
+
+    Args:
+        key: The filter key to validate
+
+    Raises:
+        ValueError: If the key contains invalid characters
+    """
+    # Allow alphanumeric characters, underscores, dots, and hyphens
+    if not _FILTER_PATTERN.match(key):
+        raise ValueError(
+            f"Invalid filter key: '{key}'. Filter keys must contain only alphanumeric characters, underscores, dots, and hyphens."
+        )
 
 
 class BasePostgresStore(Generic[C]):
@@ -621,6 +641,8 @@ class BasePostgresStore(Generic[C]):
 
     def _get_filter_condition(self, key: str, op: str, value: Any) -> tuple[str, list]:
         """Helper to generate filter conditions."""
+        _validate_filter_key(key)
+
         if op == "$eq":
             return "value->%s = %s::jsonb", [key, json.dumps(value)]
         elif op == "$gt":
