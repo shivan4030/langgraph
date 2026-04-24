@@ -636,7 +636,8 @@ def prepare_single_task(
                 "langgraph_checkpoint_ns": task_checkpoint_ns,
             }
             if task_id_checksum is not None:
-                assert task_id == task_id_checksum, f"{task_id} != {task_id_checksum}"
+                if task_id != task_id_checksum:
+                    raise ValueError(f"{task_id} != {task_id_checksum}")
             if for_execution:
                 if node := proc.node:
                     if proc.metadata:
@@ -785,7 +786,8 @@ def prepare_push_task_functional(
         "langgraph_checkpoint_ns": task_checkpoint_ns,
     }
     if task_id_checksum is not None:
-        assert task_id == task_id_checksum, f"{task_id} != {task_id_checksum}"
+        if task_id != task_id_checksum:
+            raise ValueError(f"{task_id} != {task_id_checksum}")
     if for_execution:
         writes: deque[tuple[str, Any]] = deque()
         cache_policy = call.cache_policy or cache_policy
@@ -934,7 +936,8 @@ def prepare_push_task_send(
         "langgraph_checkpoint_ns": task_checkpoint_ns,
     }
     if task_id_checksum is not None:
-        assert task_id == task_id_checksum, f"{task_id} != {task_id_checksum}"
+        if task_id != task_id_checksum:
+            raise ValueError(f"{task_id} != {task_id_checksum}")
     if for_execution:
         if proc.metadata:
             metadata.update(proc.metadata)

@@ -813,7 +813,10 @@ def interrupt(value: Any) -> Any:
     # find current resume value
     v = scratchpad.get_null_resume(True)
     if v is not None:
-        assert len(scratchpad.resume) == idx, (scratchpad.resume, idx)
+        if len(scratchpad.resume) != idx:
+            raise ValueError(
+                f"Resume length mismatch: expected {idx}, got {len(scratchpad.resume)} ({scratchpad.resume})"
+            )
         scratchpad.resume.append(v)
         conf[CONFIG_KEY_SEND]([(RESUME, scratchpad.resume)])
         return v
