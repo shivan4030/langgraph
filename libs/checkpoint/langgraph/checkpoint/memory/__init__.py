@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import _codecs
+import builtins
 import logging
 import os
 import pickle
@@ -530,6 +532,19 @@ class InMemorySaver(
 MemorySaver = InMemorySaver  # Kept for backwards compatibility
 
 
+class _SafeUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        if module == "builtins":
+            return getattr(builtins, name)
+        elif module == "_codecs" and name == "encode":
+            return _codecs.encode
+        raise pickle.UnpicklingError(f"global '{module}.{name}' is forbidden")
+
+
+def _safe_load(fileobj: Any) -> Any:
+    return _SafeUnpickler(fileobj).load()
+
+
 class PersistentDict(defaultdict):
     """Persistent dictionary with an API compatible with shelve and anydbm.
 
@@ -591,7 +606,7 @@ class PersistentDict(defaultdict):
         if self.flag == "n":
             return
         with open(self.filename, "rb" if self.format == "pickle" else "r") as fileobj:
-            for loader in (pickle.load,):
+            for loader in (_safe_load,):
                 fileobj.seek(0)
                 try:
                     return self.update(loader(fileobj))
