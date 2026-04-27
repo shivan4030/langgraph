@@ -1,0 +1,4 @@
+## 2024-05-18 - [PostgreSQL SQL Injection in Table Interpolation]
+**Vulnerability:** In `libs/checkpoint-postgres`, the `setup` method for stores used f-strings (`f"CREATE TABLE IF NOT EXISTS {table}..."`) to interpolate table names dynamically.
+**Learning:** This existed because Python f-strings are often mistakenly assumed to be safe for table names when static (like "store_migrations"). However, dynamically generating table queries in `psycopg` should exclusively use `psycopg.sql` to prevent SQL injection or schema issues if user input is ever passed to those internal functions.
+**Prevention:** Always use `sql.SQL("... {} ...").format(sql.Identifier(table))` when injecting database objects (tables/columns) rather than parameterizing them with `%s` or interpolating with f-strings. Additionally, rename local loop variables named `sql` to `migration_sql` to prevent shadowing the `psycopg.sql` module import.
