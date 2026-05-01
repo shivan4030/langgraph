@@ -1095,13 +1095,19 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
 
         def _get_version(cur: Cursor[dict[str, Any]], table: str) -> int:
             cur.execute(
-                f"""
+                sql.SQL(
+                    """
                 CREATE TABLE IF NOT EXISTS {table} (
                     v INTEGER PRIMARY KEY
                 )
             """
+                ).format(table=sql.Identifier(table))
             )
-            cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            cur.execute(
+                sql.SQL("SELECT v FROM {table} ORDER BY v DESC LIMIT 1").format(
+                    table=sql.Identifier(table)
+                )
+            )
             row = cast(dict, cur.fetchone())
             if row is None:
                 version = -1

@@ -1,0 +1,4 @@
+## 2025-02-14 - Fix SQL injection vulnerability in `store/postgres/aio.py` and `store/postgres/base.py`
+**Vulnerability:** A SQL injection vulnerability was found in `_get_version` function in `libs/checkpoint-postgres/langgraph/store/postgres/aio.py` and `libs/checkpoint-postgres/langgraph/store/postgres/base.py`. `f` strings were being used to interpolate table names into query strings.
+**Learning:** This existed because `table` was a local parameter and the author seemingly knew it would only ever receive "store_migrations" or "vector_migrations", thus deemed an f-string safe enough. However, this pattern leaves room for future errors or refactors causing severe SQLi.
+**Prevention:** In `psycopg` (v3), one should always leverage `psycopg.sql` (e.g., `sql.SQL` combined with `sql.Identifier`) when interpolating identifiers (such as table or column names) to maintain strict injection prevention standards.
