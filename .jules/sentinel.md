@@ -1,0 +1,4 @@
+## 2025-05-05 - [CRITICAL] Prevent SQL injection when dynamically building queries with psycopg
+**Vulnerability:** SQL injection vulnerability in `libs/checkpoint-postgres/langgraph/store/postgres/base.py` and `aio.py` due to using f-strings to format table names directly into SQL queries during database migrations (`CREATE TABLE IF NOT EXISTS {table}`).
+**Learning:** `psycopg` recommends using `psycopg.sql` (e.g., `sql.SQL` and `sql.Identifier`) for dynamic query building when dealing with database identifiers like table names. Attempting to use f-strings or standard string formatting creates a high risk of SQL injection. Also, it's important to rename variables (like `sql` to `migration_sql` in loops) to avoid shadowing the `sql` module import.
+**Prevention:** Always use `psycopg.sql` for dynamic query building, specifically `sql.Identifier` for tables and columns, to safely escape and construct SQL queries without injection vulnerabilities.
