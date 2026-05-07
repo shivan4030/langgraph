@@ -7,6 +7,7 @@ import sys
 import warnings
 from collections.abc import Callable, Iterator, Mapping
 from typing import Any, cast
+from urllib.parse import urlparse
 
 import httpx
 import orjson
@@ -172,10 +173,21 @@ class SyncHttpClient:
                     stacklevel=2,
                 )
                 r.close()
+                loc_parsed = urlparse(loc)
+                base_parsed = urlparse(str(self.client.base_url))
+                is_cross_origin = loc_parsed.netloc != "" and (
+                    loc_parsed.netloc != base_parsed.netloc
+                    or loc_parsed.scheme != base_parsed.scheme
+                )
+                reconnect_headers = {
+                    k: v
+                    for k, v in request_headers.items()
+                    if not (is_cross_origin and k.lower() == "x-api-key")
+                }
                 return self.request_reconnect(
                     loc,
                     "GET",
-                    headers=request_headers,
+                    headers=reconnect_headers,
                     # don't pass on_response so it's only called once
                     reconnect_limit=reconnect_limit - 1,
                 )
@@ -200,18 +212,28 @@ class SyncHttpClient:
         if headers:
             request_headers.update(headers)
 
-        reconnect_headers = {
-            key: value
-            for key, value in request_headers.items()
-            if key.lower() not in {"content-length", "content-type"}
-        }
-
         last_event_id: str | None = None
         reconnect_path: str | None = None
         reconnect_attempts = 0
         max_reconnect_attempts = 5
 
         while True:
+            is_cross_origin = False
+            if reconnect_path is not None:
+                loc_parsed = urlparse(reconnect_path)
+                base_parsed = urlparse(str(self.client.base_url))
+                is_cross_origin = loc_parsed.netloc != "" and (
+                    loc_parsed.netloc != base_parsed.netloc
+                    or loc_parsed.scheme != base_parsed.scheme
+                )
+
+            reconnect_headers = {
+                key: value
+                for key, value in request_headers.items()
+                if key.lower() not in {"content-length", "content-type"}
+                and not (is_cross_origin and key.lower() == "x-api-key")
+            }
+
             current_headers = dict(
                 request_headers if reconnect_path is None else reconnect_headers
             )
