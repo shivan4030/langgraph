@@ -1040,33 +1040,103 @@ ADD {relpath} /deps/{name}
     env_vars = []
 
     if (store_config := config.get("store")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_STORE='{json.dumps(store_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_STORE='%s'"
+            % (
+                json.dumps(store_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (auth_config := config.get("auth")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_AUTH='{json.dumps(auth_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_AUTH='%s'"
+            % (
+                json.dumps(auth_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (encryption_config := config.get("encryption")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_ENCRYPTION='{json.dumps(encryption_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_ENCRYPTION='%s'"
+            % (
+                json.dumps(encryption_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (http_config := config.get("http")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_HTTP='{json.dumps(http_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_HTTP='%s'"
+            % (
+                json.dumps(http_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     # Inject webhooks configuration if provided
     if (webhooks_config := config.get("webhooks")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_WEBHOOKS='{json.dumps(webhooks_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_WEBHOOKS='%s'"
+            % (
+                json.dumps(webhooks_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (checkpointer_config := config.get("checkpointer")) is not None:
         env_vars.append(
-            f"ENV LANGGRAPH_CHECKPOINTER='{json.dumps(checkpointer_config)}'"
+            "ENV LANGGRAPH_CHECKPOINTER='%s'"
+            % (
+                json.dumps(checkpointer_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
         )
 
     if (ui := config.get("ui")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_UI='{json.dumps(ui)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_UI='%s'"
+            % (
+                json.dumps(ui)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (ui_config := config.get("ui_config")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_UI_CONFIG='{json.dumps(ui_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_UI_CONFIG='%s'"
+            % (
+                json.dumps(ui_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
-    env_vars.append(f"ENV LANGSERVE_GRAPHS='{json.dumps(config['graphs'])}'")
+    env_vars.append(
+        "ENV LANGSERVE_GRAPHS='%s'"
+        % (
+            json.dumps(config["graphs"])
+            .replace("'", "'\\''")
+            .replace("'", "'\\''")
+            .replace("'", r"'\''")
+        )
+    )
 
     js_inst_str: str = ""
     if (config.get("ui") or config.get("node_version")) and local_deps.working_dir:
@@ -1171,33 +1241,103 @@ def node_config_to_docker(
     env_vars: list[str] = []
 
     if (store_config := config.get("store")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_STORE='{json.dumps(store_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_STORE='%s'"
+            % (
+                json.dumps(store_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (auth_config := config.get("auth")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_AUTH='{json.dumps(auth_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_AUTH='%s'"
+            % (
+                json.dumps(auth_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (encryption_config := config.get("encryption")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_ENCRYPTION='{json.dumps(encryption_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_ENCRYPTION='%s'"
+            % (
+                json.dumps(encryption_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (http_config := config.get("http")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_HTTP='{json.dumps(http_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_HTTP='%s'"
+            % (
+                json.dumps(http_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     # Inject webhooks configuration if provided
     if (webhooks_config := config.get("webhooks")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_WEBHOOKS='{json.dumps(webhooks_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_WEBHOOKS='%s'"
+            % (
+                json.dumps(webhooks_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if (checkpointer_config := config.get("checkpointer")) is not None:
         env_vars.append(
-            f"ENV LANGGRAPH_CHECKPOINTER='{json.dumps(checkpointer_config)}'"
+            "ENV LANGGRAPH_CHECKPOINTER='%s'"
+            % (
+                json.dumps(checkpointer_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
         )
 
     if ui := config.get("ui"):
-        env_vars.append(f"ENV LANGGRAPH_UI='{json.dumps(ui)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_UI='%s'"
+            % (
+                json.dumps(ui)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
     if ui_config := config.get("ui_config"):
-        env_vars.append(f"ENV LANGGRAPH_UI_CONFIG='{json.dumps(ui_config)}'")
+        env_vars.append(
+            "ENV LANGGRAPH_UI_CONFIG='%s'"
+            % (
+                json.dumps(ui_config)
+                .replace("'", "'\\''")
+                .replace("'", "'\\''")
+                .replace("'", r"'\''")
+            )
+        )
 
-    env_vars.append(f"ENV LANGSERVE_GRAPHS='{json.dumps(config['graphs'])}'")
+    env_vars.append(
+        "ENV LANGSERVE_GRAPHS='%s'"
+        % (
+            json.dumps(config["graphs"])
+            .replace("'", "'\\''")
+            .replace("'", "'\\''")
+            .replace("'", r"'\''")
+        )
+    )
 
     # For monorepo support, we need to handle install and build commands differently
     if build_context:
