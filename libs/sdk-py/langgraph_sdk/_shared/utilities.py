@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import urllib.parse
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
@@ -127,6 +128,34 @@ def _sse_to_v2_dict(event: str, data: Any) -> dict[str, Any] | None:
     else:
         result["interrupts"] = []
     return result
+
+
+def is_cross_origin(
+    client: httpx.Client | httpx.AsyncClient, original_path: str, new_location: str
+) -> bool:
+    """Check if the new location is cross-origin compared to the original request."""
+    # Build the full original URL
+    orig_url = client.base_url.join(original_path)
+    # Build the full new URL
+    new_url = orig_url.join(new_location)
+
+    # Compare scheme, host, and port
+    orig_parsed = urllib.parse.urlparse(str(orig_url))
+    new_parsed = urllib.parse.urlparse(str(new_url))
+
+    return (
+        orig_parsed.scheme != new_parsed.scheme
+        or orig_parsed.netloc != new_parsed.netloc
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Strip sensitive headers like x-api-key."""
+    stripped = dict(headers)
+    for k in list(stripped.keys()):
+        if k.lower() == "x-api-key":
+            del stripped[k]
+    return stripped
 
 
 def _resolve_timezone(tz: str | tzinfo | ZoneInfo | None) -> str | None:
