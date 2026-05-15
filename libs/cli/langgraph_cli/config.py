@@ -5,7 +5,7 @@ import pathlib
 import re
 import textwrap
 from collections import Counter
-from typing import Literal, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import click
 
@@ -97,6 +97,11 @@ RUN PYTHONDONTWRITEBYTECODE=1 {install_cmd} --no-cache-dir --no-deps -e /api
                 "RUN rm /usr/bin/uv /usr/bin/uvx\n# -- End of build deps removal --"
             )
     return "\n".join(commands)
+
+
+def _safe_json_dumps(obj: Any) -> str:
+    """Dump JSON while escaping single quotes for use in single-quoted ENV values."""
+    return json.dumps(obj).replace("'", r"'\''")
 
 
 def _parse_version(version_str: str) -> tuple[int, int]:
@@ -1040,33 +1045,33 @@ ADD {relpath} /deps/{name}
     env_vars = []
 
     if (store_config := config.get("store")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_STORE='{json.dumps(store_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_STORE='{_safe_json_dumps(store_config)}'")
 
     if (auth_config := config.get("auth")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_AUTH='{json.dumps(auth_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_AUTH='{_safe_json_dumps(auth_config)}'")
 
     if (encryption_config := config.get("encryption")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_ENCRYPTION='{json.dumps(encryption_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_ENCRYPTION='{_safe_json_dumps(encryption_config)}'")
 
     if (http_config := config.get("http")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_HTTP='{json.dumps(http_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_HTTP='{_safe_json_dumps(http_config)}'")
 
     # Inject webhooks configuration if provided
     if (webhooks_config := config.get("webhooks")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_WEBHOOKS='{json.dumps(webhooks_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_WEBHOOKS='{_safe_json_dumps(webhooks_config)}'")
 
     if (checkpointer_config := config.get("checkpointer")) is not None:
         env_vars.append(
-            f"ENV LANGGRAPH_CHECKPOINTER='{json.dumps(checkpointer_config)}'"
+            f"ENV LANGGRAPH_CHECKPOINTER='{_safe_json_dumps(checkpointer_config)}'"
         )
 
     if (ui := config.get("ui")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_UI='{json.dumps(ui)}'")
+        env_vars.append(f"ENV LANGGRAPH_UI='{_safe_json_dumps(ui)}'")
 
     if (ui_config := config.get("ui_config")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_UI_CONFIG='{json.dumps(ui_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_UI_CONFIG='{_safe_json_dumps(ui_config)}'")
 
-    env_vars.append(f"ENV LANGSERVE_GRAPHS='{json.dumps(config['graphs'])}'")
+    env_vars.append(f"ENV LANGSERVE_GRAPHS='{_safe_json_dumps(config['graphs'])}'")
 
     js_inst_str: str = ""
     if (config.get("ui") or config.get("node_version")) and local_deps.working_dir:
@@ -1171,33 +1176,33 @@ def node_config_to_docker(
     env_vars: list[str] = []
 
     if (store_config := config.get("store")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_STORE='{json.dumps(store_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_STORE='{_safe_json_dumps(store_config)}'")
 
     if (auth_config := config.get("auth")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_AUTH='{json.dumps(auth_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_AUTH='{_safe_json_dumps(auth_config)}'")
 
     if (encryption_config := config.get("encryption")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_ENCRYPTION='{json.dumps(encryption_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_ENCRYPTION='{_safe_json_dumps(encryption_config)}'")
 
     if (http_config := config.get("http")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_HTTP='{json.dumps(http_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_HTTP='{_safe_json_dumps(http_config)}'")
 
     # Inject webhooks configuration if provided
     if (webhooks_config := config.get("webhooks")) is not None:
-        env_vars.append(f"ENV LANGGRAPH_WEBHOOKS='{json.dumps(webhooks_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_WEBHOOKS='{_safe_json_dumps(webhooks_config)}'")
 
     if (checkpointer_config := config.get("checkpointer")) is not None:
         env_vars.append(
-            f"ENV LANGGRAPH_CHECKPOINTER='{json.dumps(checkpointer_config)}'"
+            f"ENV LANGGRAPH_CHECKPOINTER='{_safe_json_dumps(checkpointer_config)}'"
         )
 
     if ui := config.get("ui"):
-        env_vars.append(f"ENV LANGGRAPH_UI='{json.dumps(ui)}'")
+        env_vars.append(f"ENV LANGGRAPH_UI='{_safe_json_dumps(ui)}'")
 
     if ui_config := config.get("ui_config"):
-        env_vars.append(f"ENV LANGGRAPH_UI_CONFIG='{json.dumps(ui_config)}'")
+        env_vars.append(f"ENV LANGGRAPH_UI_CONFIG='{_safe_json_dumps(ui_config)}'")
 
-    env_vars.append(f"ENV LANGSERVE_GRAPHS='{json.dumps(config['graphs'])}'")
+    env_vars.append(f"ENV LANGSERVE_GRAPHS='{_safe_json_dumps(config['graphs'])}'")
 
     # For monorepo support, we need to handle install and build commands differently
     if build_context:
