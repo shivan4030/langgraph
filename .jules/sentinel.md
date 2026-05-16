@@ -1,0 +1,4 @@
+## 2024-05-16 - Dockerfile Injection via single quotes in json.dumps
+**Vulnerability:** In `libs/cli/langgraph_cli/config.py`, configuration values are serialized with `json.dumps()` and embedded directly within single-quoted `ENV` directives in Dockerfiles (`ENV VAR='{json.dumps(config)}'`). Because `json.dumps()` does not escape single quotes, if a config value contains a single quote, it could prematurely close the single-quoted string and inject arbitrary Dockerfile instructions.
+**Learning:** This happened because `json.dumps()` is designed to output valid JSON (which only uses double quotes), and it does not escape single quotes, making it unsafe to embed directly within a single-quoted string without further escaping.
+**Prevention:** Always explicitly escape single quotes when embedding JSON strings into single-quoted contexts (e.g. `json.dumps(config).replace("'", r"'")` or similar).
