@@ -4,6 +4,7 @@ import copy
 import dataclasses
 import decimal
 import importlib
+import io
 import json
 import logging
 import pathlib
@@ -47,6 +48,25 @@ EMPTY_BYTES = b""
 logger = logging.getLogger(__name__)
 
 
+class _RestrictedUnpickler(pickle.Unpickler):
+    def __init__(
+        self,
+        file: Any,
+        *,
+        allowed_modules: set[tuple[str, ...]] | Literal[True] | None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(file, **kwargs)
+        self.allowed_modules = allowed_modules
+
+    def find_class(self, module: str, name: str) -> Any:
+        if self.allowed_modules is True:
+            return super().find_class(module, name)
+        if self.allowed_modules is not None and (module, name) in self.allowed_modules:
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(f"Global '{module}.{name}' is forbidden")
+
+
 class JsonPlusSerializer(SerializerProtocol):
     """Serializer that uses ormsgpack, with optional fallbacks.
 
@@ -66,6 +86,9 @@ class JsonPlusSerializer(SerializerProtocol):
         allowed_msgpack_modules: (
             AllowedMsgpackModules | Literal[True] | None
         ) = _lg_msgpack._SENTINEL,
+        allowed_pickle_modules: (
+            Iterable[tuple[str, ...]] | Literal[True] | None
+        ) = _lg_msgpack._SENTINEL,
         __unpack_ext_hook__: Callable[[int, bytes], Any] | None = None,
     ) -> None:
         if allowed_msgpack_modules is _lg_msgpack._SENTINEL:
@@ -73,11 +96,14 @@ class JsonPlusSerializer(SerializerProtocol):
                 allowed_msgpack_modules = None
             else:
                 allowed_msgpack_modules = True
+        if allowed_pickle_modules is _lg_msgpack._SENTINEL:
+            allowed_pickle_modules = _lg_msgpack.SAFE_MSGPACK_TYPES
         self.pickle_fallback = pickle_fallback
         self._allowed_json_modules: set[tuple[str, ...]] | Literal[True] | None = (
             _normalize_allowlist(allowed_json_modules)
         )
         self._allowed_msgpack_modules = _normalize_allowlist(allowed_msgpack_modules)
+        self._allowed_pickle_modules = _normalize_allowlist(allowed_pickle_modules)
 
         self._custom_unpack_ext_hook = __unpack_ext_hook__ is not None
         self._unpack_ext_hook = (
@@ -112,6 +138,9 @@ class JsonPlusSerializer(SerializerProtocol):
         clone = copy.copy(self)
         clone._allowed_json_modules = _normalize_allowlist(self._allowed_json_modules)
         clone._allowed_msgpack_modules = _normalize_allowlist(allowed_msgpack_modules)
+        clone._allowed_pickle_modules = _normalize_allowlist(
+            self._allowed_pickle_modules
+        )
         if not clone._custom_unpack_ext_hook:
             clone._unpack_ext_hook = _create_msgpack_ext_hook(
                 clone._allowed_msgpack_modules
@@ -255,7 +284,9 @@ class JsonPlusSerializer(SerializerProtocol):
                 data_, ext_hook=self._unpack_ext_hook, option=ormsgpack.OPT_NON_STR_KEYS
             )
         elif self.pickle_fallback and type_ == "pickle":
-            return pickle.loads(data_)
+            return _RestrictedUnpickler(
+                io.BytesIO(data_), allowed_modules=self._allowed_pickle_modules
+            ).load()
         else:
             raise NotImplementedError(f"Unknown serialization type: {type_}")
 
