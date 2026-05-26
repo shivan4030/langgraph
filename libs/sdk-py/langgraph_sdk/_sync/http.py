@@ -11,7 +11,11 @@ from typing import Any, cast
 import httpx
 import orjson
 
-from langgraph_sdk._shared.utilities import _orjson_default
+from langgraph_sdk._shared.utilities import (
+    _orjson_default,
+    is_cross_origin,
+    strip_sensitive_headers,
+)
 from langgraph_sdk.errors import _raise_for_status_typed
 from langgraph_sdk.schema import QueryParamTypes, StreamPart
 from langgraph_sdk.sse import SSEDecoder, iter_lines_raw
@@ -172,10 +176,15 @@ class SyncHttpClient:
                     stacklevel=2,
                 )
                 r.close()
+
+                next_headers = dict(request_headers)
+                if is_cross_origin(r.url, loc):
+                    next_headers = strip_sensitive_headers(next_headers)
+
                 return self.request_reconnect(
                     loc,
                     "GET",
-                    headers=request_headers,
+                    headers=next_headers,
                     # don't pass on_response so it's only called once
                     reconnect_limit=reconnect_limit - 1,
                 )
@@ -245,6 +254,8 @@ class SyncHttpClient:
                 reconnect_location = res.headers.get("location")
                 if reconnect_location:
                     reconnect_path = reconnect_location
+                    if is_cross_origin(res.url, reconnect_location):
+                        reconnect_headers = strip_sensitive_headers(reconnect_headers)
 
                 decoder = SSEDecoder()
                 try:
