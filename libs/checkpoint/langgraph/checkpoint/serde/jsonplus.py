@@ -4,12 +4,14 @@ import copy
 import dataclasses
 import decimal
 import importlib
+import io
 import json
 import logging
 import pathlib
 import pickle
 import re
 import sys
+import warnings
 from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, time, timedelta, timezone
@@ -47,6 +49,40 @@ EMPTY_BYTES = b""
 logger = logging.getLogger(__name__)
 
 
+class _RestrictedUnpickler(pickle.Unpickler):
+    def __init__(
+        self,
+        *args: Any,
+        allowed_modules: set[tuple[str, ...]] | Literal[True],
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.allowed_modules = allowed_modules
+
+    def find_class(self, module: str, name: str) -> Any:
+        if self.allowed_modules is True:
+            return super().find_class(module, name)
+
+        module_parts = tuple(module.split("."))
+        is_allowed = False
+        if self.allowed_modules:
+            for length in range(1, len(module_parts) + 2):
+                if length <= len(module_parts):
+                    prefix = module_parts[:length]
+                else:
+                    prefix = module_parts + (name,)
+                if prefix in self.allowed_modules:
+                    is_allowed = True
+                    break
+
+        if not is_allowed:
+            raise pickle.UnpicklingError(
+                f"Unpickling of {module}.{name} is blocked by allowed_pickle_modules."
+            )
+
+        return super().find_class(module, name)
+
+
 class JsonPlusSerializer(SerializerProtocol):
     """Serializer that uses ormsgpack, with optional fallbacks.
 
@@ -66,6 +102,7 @@ class JsonPlusSerializer(SerializerProtocol):
         allowed_msgpack_modules: (
             AllowedMsgpackModules | Literal[True] | None
         ) = _lg_msgpack._SENTINEL,
+        allowed_pickle_modules: set[tuple[str, ...]] | Literal[True] = True,
         __unpack_ext_hook__: Callable[[int, bytes], Any] | None = None,
     ) -> None:
         if allowed_msgpack_modules is _lg_msgpack._SENTINEL:
@@ -74,6 +111,17 @@ class JsonPlusSerializer(SerializerProtocol):
             else:
                 allowed_msgpack_modules = True
         self.pickle_fallback = pickle_fallback
+        self._allowed_pickle_modules = allowed_pickle_modules
+
+        if self.pickle_fallback and self._allowed_pickle_modules is True:
+            warnings.warn(
+                "pickle_fallback is enabled but allowed_pickle_modules is set to True. "
+                "This allows arbitrary code execution during deserialization. "
+                "Please configure allowed_pickle_modules to a restricted list of modules.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         self._allowed_json_modules: set[tuple[str, ...]] | Literal[True] | None = (
             _normalize_allowlist(allowed_json_modules)
         )
@@ -255,7 +303,9 @@ class JsonPlusSerializer(SerializerProtocol):
                 data_, ext_hook=self._unpack_ext_hook, option=ormsgpack.OPT_NON_STR_KEYS
             )
         elif self.pickle_fallback and type_ == "pickle":
-            return pickle.loads(data_)
+            return _RestrictedUnpickler(
+                io.BytesIO(data_), allowed_modules=self._allowed_pickle_modules
+            ).load()
         else:
             raise NotImplementedError(f"Unknown serialization type: {type_}")
 
