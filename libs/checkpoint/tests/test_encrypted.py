@@ -435,3 +435,11 @@ def test_with_allowlist_uses_copy_protocol() -> None:
     assert updated is not saver
     assert updated.copy_was_used is True
     assert saver.copy_was_used is False
+
+
+def test_assert_replaced_with_value_error() -> None:
+    encrypted = _make_encrypted_serde(allowed_msgpack_modules=None)
+    with pytest.raises(ValueError, match="Unsupported cipher: badcipher"):
+        encrypted.cipher.decrypt(
+            "badcipher", b"some_bad_data_here1234567890_does_not_matter"
+        )
