@@ -9,10 +9,14 @@ class EncryptedSerializer(SerializerProtocol):
     """Serializer that encrypts and decrypts data using an encryption protocol."""
 
     def __init__(
-        self, cipher: CipherProtocol, serde: SerializerProtocol = JsonPlusSerializer()
+        self,
+        cipher: CipherProtocol,
+        serde: SerializerProtocol = JsonPlusSerializer(),
+        allow_unencrypted: bool = False,
     ) -> None:
         self.cipher = cipher
         self.serde = serde
+        self.allow_unencrypted = allow_unencrypted
 
     def dumps_typed(self, obj: Any) -> tuple[str, bytes]:
         """Serialize an object to a tuple `(type, bytes)` and encrypt the bytes."""
@@ -27,6 +31,8 @@ class EncryptedSerializer(SerializerProtocol):
         enc_cipher, ciphertext = data
         # unencrypted data
         if "+" not in enc_cipher:
+            if not self.allow_unencrypted:
+                raise ValueError("Unencrypted data is not allowed.")
             return self.serde.loads_typed(data)
         # extract cipher name
         typ, ciphername = enc_cipher.split("+", 1)
@@ -37,7 +43,10 @@ class EncryptedSerializer(SerializerProtocol):
 
     @classmethod
     def from_pycryptodome_aes(
-        cls, serde: SerializerProtocol = JsonPlusSerializer(), **kwargs: Any
+        cls,
+        serde: SerializerProtocol = JsonPlusSerializer(),
+        allow_unencrypted: bool = False,
+        **kwargs: Any,
     ) -> "EncryptedSerializer":
         """Create an `EncryptedSerializer` using AES encryption."""
         try:
@@ -69,7 +78,8 @@ class EncryptedSerializer(SerializerProtocol):
                 return "aes", cipher.nonce + tag + ciphertext
 
             def decrypt(self, ciphername: str, ciphertext: bytes) -> bytes:
-                assert ciphername == "aes", f"Unsupported cipher: {ciphername}"
+                if ciphername != "aes":
+                    raise ValueError(f"Unsupported cipher: {ciphername}")
                 nonce = ciphertext[:16]
                 tag = ciphertext[16:32]
                 actual_ciphertext = ciphertext[32:]
@@ -77,4 +87,4 @@ class EncryptedSerializer(SerializerProtocol):
                 cipher = AES.new(key, **kwargs, nonce=nonce)
                 return cipher.decrypt_and_verify(actual_ciphertext, tag)
 
-        return cls(PycryptodomeAesCipher(), serde)
+        return cls(PycryptodomeAesCipher(), serde, allow_unencrypted=allow_unencrypted)
