@@ -59,6 +59,7 @@ def _make_encrypted_serde(
     allowed_msgpack_modules: (
         _lg_msgpack.AllowedMsgpackModules | Literal[True] | None | object
     ) = _lg_msgpack._SENTINEL,
+    allow_unencrypted: bool = False,
 ) -> EncryptedSerializer:
     """Create an EncryptedSerializer with AES encryption for testing."""
     inner = JsonPlusSerializer(
@@ -68,7 +69,7 @@ def _make_encrypted_serde(
         )
     )
     return EncryptedSerializer.from_pycryptodome_aes(
-        serde=inner, key=b"1234567890123456"
+        serde=inner, key=b"1234567890123456", allow_unencrypted=allow_unencrypted
     )
 
 
@@ -400,9 +401,9 @@ class TestEncryptedSerializerUnencryptedFallback:
     """Test that EncryptedSerializer handles unencrypted data correctly."""
 
     def test_loads_unencrypted_data(self) -> None:
-        """EncryptedSerializer should handle unencrypted data for backwards compat."""
+        """EncryptedSerializer should handle unencrypted data for backwards compat if explicitly configured."""
         plain = JsonPlusSerializer(allowed_msgpack_modules=None)
-        encrypted = _make_encrypted_serde(allowed_msgpack_modules=None)
+        encrypted = _make_encrypted_serde(allowed_msgpack_modules=None, allow_unencrypted=True)
 
         obj = {"key": "value", "number": 42}
 
@@ -413,6 +414,21 @@ class TestEncryptedSerializerUnencryptedFallback:
         # Should still deserialize with encrypted serde
         result = encrypted.loads_typed(dumped)
         assert result == obj
+
+    def test_rejects_unencrypted_data_by_default(self) -> None:
+        """EncryptedSerializer should reject unencrypted data by default."""
+        plain = JsonPlusSerializer(allowed_msgpack_modules=None)
+        encrypted = _make_encrypted_serde(allowed_msgpack_modules=None)
+
+        obj = {"key": "value", "number": 42}
+
+        # Serialize with plain serde
+        dumped = plain.dumps_typed(obj)
+        assert "+aes" not in dumped[0]
+
+        # Should raise ValueError when trying to deserialize unencrypted data
+        with pytest.raises(ValueError, match="Unencrypted data is not allowed"):
+            encrypted.loads_typed(dumped)
 
 
 def test_with_allowlist_uses_copy_protocol() -> None:
