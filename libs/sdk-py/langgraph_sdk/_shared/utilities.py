@@ -8,6 +8,7 @@ import re
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlparse
 
 import httpx
 
@@ -160,6 +161,27 @@ def _resolve_timezone(tz: str | tzinfo | ZoneInfo | None) -> str | None:
 
 def _provided_vals(d: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in d.items() if v is not None}
+
+
+def is_cross_origin(url: str, target: str) -> bool:
+    """Check if the target URL is cross-origin compared to the original URL."""
+    parsed_url = urlparse(url)
+    parsed_target = urlparse(target)
+    if not parsed_target.scheme and not parsed_target.netloc:
+        return False
+    return (parsed_url.scheme, parsed_url.netloc) != (
+        parsed_target.scheme,
+        parsed_target.netloc,
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Strip sensitive headers from the given headers dictionary."""
+    return {
+        k: v
+        for k, v in headers.items()
+        if k.lower() not in {"authorization", "x-api-key", "cookie"}
+    }
 
 
 _registered_transports: list[httpx.ASGITransport] = []
