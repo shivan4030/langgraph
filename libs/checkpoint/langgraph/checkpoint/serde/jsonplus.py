@@ -10,6 +10,7 @@ import pathlib
 import pickle
 import re
 import sys
+import warnings
 from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, time, timedelta, timezone
@@ -66,6 +67,7 @@ class JsonPlusSerializer(SerializerProtocol):
         allowed_msgpack_modules: (
             AllowedMsgpackModules | Literal[True] | None
         ) = _lg_msgpack._SENTINEL,
+        allowed_pickle_modules: Iterable[tuple[str, ...]] | Literal[True] | None = True,
         __unpack_ext_hook__: Callable[[int, bytes], Any] | None = None,
     ) -> None:
         if allowed_msgpack_modules is _lg_msgpack._SENTINEL:
@@ -74,6 +76,17 @@ class JsonPlusSerializer(SerializerProtocol):
             else:
                 allowed_msgpack_modules = True
         self.pickle_fallback = pickle_fallback
+        self._allowed_pickle_modules = _normalize_allowlist(allowed_pickle_modules)
+
+        if self.pickle_fallback and self._allowed_pickle_modules is True:
+            warnings.warn(
+                "Using `pickle_fallback=True` with `allowed_pickle_modules=True` (the default) "
+                "introduces a security risk of arbitrary code execution when deserializing untrusted data. "
+                "It is strongly recommended to restrict `allowed_pickle_modules`.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         self._allowed_json_modules: set[tuple[str, ...]] | Literal[True] | None = (
             _normalize_allowlist(allowed_json_modules)
         )
@@ -255,7 +268,24 @@ class JsonPlusSerializer(SerializerProtocol):
                 data_, ext_hook=self._unpack_ext_hook, option=ormsgpack.OPT_NON_STR_KEYS
             )
         elif self.pickle_fallback and type_ == "pickle":
-            return pickle.loads(data_)
+            import io
+
+            class _RestrictedUnpickler(pickle.Unpickler):
+                def find_class(_self, module: str, name: str) -> Any:
+                    if self._allowed_pickle_modules is True:
+                        return super().find_class(module, name)
+
+                    if (
+                        self._allowed_pickle_modules is None
+                        or (module, name) not in self._allowed_pickle_modules
+                    ):
+                        raise pickle.UnpicklingError(
+                            f"Global '{module}.{name}' is forbidden"
+                        )
+
+                    return super().find_class(module, name)
+
+            return _RestrictedUnpickler(io.BytesIO(data_)).load()
         else:
             raise NotImplementedError(f"Unknown serialization type: {type_}")
 
