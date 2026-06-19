@@ -1093,15 +1093,21 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
         the first time the store is used.
         """
 
+        from psycopg import sql as psycopg_sql
+
         def _get_version(cur: Cursor[dict[str, Any]], table: str) -> int:
             cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table} (
+                psycopg_sql.SQL("""
+                CREATE TABLE IF NOT EXISTS {} (
                     v INTEGER PRIMARY KEY
                 )
-            """
+            """).format(psycopg_sql.Identifier(table))
             )
-            cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            cur.execute(
+                psycopg_sql.SQL("SELECT v FROM {} ORDER BY v DESC LIMIT 1").format(
+                    psycopg_sql.Identifier(table)
+                )
+            )
             row = cast(dict, cur.fetchone())
             if row is None:
                 version = -1

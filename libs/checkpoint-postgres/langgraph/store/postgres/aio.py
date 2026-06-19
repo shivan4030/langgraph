@@ -232,15 +232,21 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
         the first time the store is used.
         """
 
+        from psycopg import sql as psycopg_sql
+
         async def _get_version(cur: AsyncCursor[DictRow], table: str) -> int:
             await cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table} (
+                psycopg_sql.SQL("""
+                CREATE TABLE IF NOT EXISTS {} (
                     v INTEGER PRIMARY KEY
                 )
-            """
+            """).format(psycopg_sql.Identifier(table))
             )
-            await cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            await cur.execute(
+                psycopg_sql.SQL("SELECT v FROM {} ORDER BY v DESC LIMIT 1").format(
+                    psycopg_sql.Identifier(table)
+                )
+            )
             row = cast(dict, await cur.fetchone())
             if row is None:
                 version = -1
