@@ -4,12 +4,14 @@ import copy
 import dataclasses
 import decimal
 import importlib
+import io
 import json
 import logging
 import pathlib
 import pickle
 import re
 import sys
+import warnings
 from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, time, timedelta, timezone
@@ -47,6 +49,38 @@ EMPTY_BYTES = b""
 logger = logging.getLogger(__name__)
 
 
+class _RestrictedUnpickler(pickle.Unpickler):
+    def __init__(
+        self,
+        file: io.BytesIO,
+        *,
+        allowed_pickle_modules: set[tuple[str, ...]] | Literal[True] | None,
+    ) -> None:
+        super().__init__(file)
+        self.allowed_pickle_modules = allowed_pickle_modules
+
+    def find_class(self, module: str, name: str) -> Any:
+        if self.allowed_pickle_modules is True:
+            warnings.warn(
+                "Unrestricted pickle unpickling is enabled. "
+                "This is a security risk if the data is untrusted.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return super().find_class(module, name)
+
+        if self.allowed_pickle_modules is not None:
+            if (module,) in self.allowed_pickle_modules or (
+                module,
+                name,
+            ) in self.allowed_pickle_modules:
+                return super().find_class(module, name)
+
+        raise pickle.UnpicklingError(
+            f"Refused to deserialize {module}.{name} due to pickle allowlist."
+        )
+
+
 class JsonPlusSerializer(SerializerProtocol):
     """Serializer that uses ormsgpack, with optional fallbacks.
 
@@ -62,6 +96,7 @@ class JsonPlusSerializer(SerializerProtocol):
         self,
         *,
         pickle_fallback: bool = False,
+        allowed_pickle_modules: Iterable[tuple[str, ...]] | Literal[True] | None = True,
         allowed_json_modules: Iterable[tuple[str, ...]] | Literal[True] | None = None,
         allowed_msgpack_modules: (
             AllowedMsgpackModules | Literal[True] | None
@@ -74,6 +109,7 @@ class JsonPlusSerializer(SerializerProtocol):
             else:
                 allowed_msgpack_modules = True
         self.pickle_fallback = pickle_fallback
+        self.allowed_pickle_modules = _normalize_allowlist(allowed_pickle_modules)
         self._allowed_json_modules: set[tuple[str, ...]] | Literal[True] | None = (
             _normalize_allowlist(allowed_json_modules)
         )
@@ -255,7 +291,10 @@ class JsonPlusSerializer(SerializerProtocol):
                 data_, ext_hook=self._unpack_ext_hook, option=ormsgpack.OPT_NON_STR_KEYS
             )
         elif self.pickle_fallback and type_ == "pickle":
-            return pickle.loads(data_)
+            return _RestrictedUnpickler(
+                io.BytesIO(data_),
+                allowed_pickle_modules=self.allowed_pickle_modules,
+            ).load()
         else:
             raise NotImplementedError(f"Unknown serialization type: {type_}")
 
