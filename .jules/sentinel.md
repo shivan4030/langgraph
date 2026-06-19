@@ -1,0 +1,4 @@
+## 2024-05-18 - Prevent SQL Injection from Dynamic Table Names in Migrations
+**Vulnerability:** Found f-string interpolation used for dynamic table names (`{table}`) in `_get_version` setup queries in `PostgresStore` and `AsyncPostgresStore`.
+**Learning:** Even though the parameters (`"store_migrations"`, `"vector_migrations"`) were hardcoded internally and not directly user-controlled, using f-strings for SQL query construction is a dangerous pattern. If the function was ever reused with untrusted input, it would result in a critical SQL injection vulnerability.
+**Prevention:** Always use `psycopg.sql.SQL` and `psycopg.sql.Identifier` when dynamically generating SQL statements that involve table or column names, avoiding standard string formatting for any SQL construction. Also remember to use `from psycopg import sql as psycopg_sql` to avoid shadowing local `sql` variables.
