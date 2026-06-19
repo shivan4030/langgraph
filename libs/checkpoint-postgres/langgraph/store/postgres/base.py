@@ -37,6 +37,7 @@ from langgraph.store.base import (
     tokenize_path,
 )
 from psycopg import Capabilities, Connection, Cursor, Pipeline
+from psycopg import sql as psql
 from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
@@ -1095,13 +1096,19 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
 
         def _get_version(cur: Cursor[dict[str, Any]], table: str) -> int:
             cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table} (
+                psql.SQL(
+                    """
+                CREATE TABLE IF NOT EXISTS {} (
                     v INTEGER PRIMARY KEY
                 )
             """
+                ).format(psql.Identifier(table))
             )
-            cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            cur.execute(
+                psql.SQL("SELECT v FROM {} ORDER BY v DESC LIMIT 1").format(
+                    psql.Identifier(table)
+                )
+            )
             row = cast(dict, cur.fetchone())
             if row is None:
                 version = -1
@@ -1111,13 +1118,15 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
 
         with self._cursor() as cur:
             version = _get_version(cur, table="store_migrations")
-            for v, sql in enumerate(self.MIGRATIONS[version + 1 :], start=version + 1):
+            for v, migration_sql in enumerate(
+                self.MIGRATIONS[version + 1 :], start=version + 1
+            ):
                 try:
-                    cur.execute(sql)
+                    cur.execute(migration_sql)
                     cur.execute("INSERT INTO store_migrations (v) VALUES (%s)", (v,))
                 except Exception as e:
                     logger.error(
-                        f"Failed to apply migration {v}.\nSql={sql}\nError={e}"
+                        f"Failed to apply migration {v}.\nSql={migration_sql}\nError={e}"
                     )
                     raise
 
@@ -1128,7 +1137,7 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
                 ):
                     if migration.condition and not migration.condition(self):
                         continue
-                    sql = migration.sql
+                    migration_sql = migration.sql
                     if migration.params:
                         params = {
                             k: v(self) if v is not None and callable(v) else v
@@ -1155,8 +1164,8 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
                                     f"Invalid index_type for pgvector: {it}"
                                 )
                             params["index_type"] = it
-                        sql = sql % params
-                    cur.execute(sql)
+                        migration_sql = migration_sql % params
+                    cur.execute(migration_sql)
                     cur.execute("INSERT INTO vector_migrations (v) VALUES (%s)", (v,))
 
 
