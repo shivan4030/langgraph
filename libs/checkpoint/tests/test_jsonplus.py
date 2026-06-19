@@ -2,6 +2,7 @@ import dataclasses
 import json
 import logging
 import pathlib
+import pickle
 import re
 import sys
 import uuid
@@ -983,3 +984,40 @@ def test_msgpack_nested_pydantic_serializes_as_dict(
     # No blocking should occur - inner is serialized as dict, not ext
     assert "blocked" not in caplog.text.lower()
     assert result == obj
+
+
+def test_pickle_fallback_restricted():
+    serde = JsonPlusSerializer(
+        pickle_fallback=True, allowed_pickle_modules=[("builtins", "set")]
+    )
+    dumped = serde.dumps_typed(set([1, 2, 3]))
+    assert dumped[0] == "msgpack"
+
+    dumped_pickle = ("pickle", pickle.dumps(set([1, 2, 3])))
+    res = serde.loads_typed(dumped_pickle)
+    assert res == set([1, 2, 3])
+
+    import os
+
+    dumped_pickle_os = ("pickle", pickle.dumps(os.system))
+    with pytest.raises(pickle.UnpicklingError, match=r"Global '.*system' is forbidden"):
+        serde.loads_typed(dumped_pickle_os)
+
+
+def test_pickle_fallback_prefix_matching():
+    serde = JsonPlusSerializer(
+        pickle_fallback=True, allowed_pickle_modules=[("builtins",)]
+    )
+    dumped_pickle = ("pickle", pickle.dumps(set([1, 2, 3])))
+    res = serde.loads_typed(dumped_pickle)
+    assert res == set([1, 2, 3])
+
+    dumped_pickle_dict = ("pickle", pickle.dumps(dict(a=1)))
+    res = serde.loads_typed(dumped_pickle_dict)
+    assert res == dict(a=1)
+
+    import os
+
+    dumped_pickle_os = ("pickle", pickle.dumps(os.system))
+    with pytest.raises(pickle.UnpicklingError, match=r"Global '.*system' is forbidden"):
+        serde.loads_typed(dumped_pickle_os)

@@ -66,8 +66,20 @@ class JsonPlusSerializer(SerializerProtocol):
         allowed_msgpack_modules: (
             AllowedMsgpackModules | Literal[True] | None
         ) = _lg_msgpack._SENTINEL,
+        allowed_pickle_modules: Iterable[tuple[str, ...]] | Literal[True] | None = True,
         __unpack_ext_hook__: Callable[[int, bytes], Any] | None = None,
     ) -> None:
+        import warnings
+
+        if pickle_fallback and allowed_pickle_modules is True:
+            warnings.warn(
+                "JsonPlusSerializer is using pickle fallback with unrestricted allowlist. "
+                "This can lead to arbitrary code execution if an attacker modifies the checkpoint data. "
+                "Please configure allowed_pickle_modules.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         if allowed_msgpack_modules is _lg_msgpack._SENTINEL:
             if _lg_msgpack.STRICT_MSGPACK_ENABLED:
                 allowed_msgpack_modules = None
@@ -78,6 +90,7 @@ class JsonPlusSerializer(SerializerProtocol):
             _normalize_allowlist(allowed_json_modules)
         )
         self._allowed_msgpack_modules = _normalize_allowlist(allowed_msgpack_modules)
+        self._allowed_pickle_modules = _normalize_allowlist(allowed_pickle_modules)
 
         self._custom_unpack_ext_hook = __unpack_ext_hook__ is not None
         self._unpack_ext_hook = (
@@ -255,7 +268,11 @@ class JsonPlusSerializer(SerializerProtocol):
                 data_, ext_hook=self._unpack_ext_hook, option=ormsgpack.OPT_NON_STR_KEYS
             )
         elif self.pickle_fallback and type_ == "pickle":
-            return pickle.loads(data_)
+            import io
+
+            return _RestrictedUnpickler(
+                io.BytesIO(data_), allowed_modules=self._allowed_pickle_modules
+            ).load()
         else:
             raise NotImplementedError(f"Unknown serialization type: {type_}")
 
@@ -825,3 +842,30 @@ def _normalize_module_keys(
         else:
             normalized.add(cast(tuple[str, ...], module))
     return normalized
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    def __init__(
+        self,
+        file: Any,
+        allowed_modules: set[tuple[str, ...]] | Literal[True] | None,
+    ) -> None:
+        super().__init__(file)
+        self.allowed_modules = allowed_modules
+
+    def find_class(self, module: str, name: str) -> Any:
+        if self.allowed_modules is True:
+            return super().find_class(module, name)
+
+        if self.allowed_modules is not None:
+            if (module, name) in self.allowed_modules:
+                return super().find_class(module, name)
+            if (module,) in self.allowed_modules:
+                return super().find_class(module, name)
+
+            # also support prefix matching (e.g. ("app", "models") allows "app.models.User")
+            for allowed in self.allowed_modules:
+                if len(allowed) == 1 and module.startswith(allowed[0] + "."):
+                    return super().find_class(module, name)
+
+        raise pickle.UnpicklingError(f"Global '{module}.{name}' is forbidden")
