@@ -4,6 +4,7 @@ import copy
 import dataclasses
 import decimal
 import importlib
+import io
 import json
 import logging
 import pathlib
@@ -45,6 +46,30 @@ if TYPE_CHECKING:
 LC_REVIVER = Reviver()
 EMPTY_BYTES = b""
 logger = logging.getLogger(__name__)
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    def __init__(
+        self,
+        file: Any,
+        *,
+        allowed_modules: set[tuple[str, ...]] | Literal[True] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(file, **kwargs)
+        self.allowed_modules = allowed_modules
+
+    def find_class(self, module: str, name: str) -> Any:
+        if self.allowed_modules is True:
+            return super().find_class(module, name)
+
+        if (module, name) in _lg_msgpack.SAFE_MSGPACK_TYPES:
+            return super().find_class(module, name)
+
+        if self.allowed_modules is not None and (module, name) in self.allowed_modules:
+            return super().find_class(module, name)
+
+        raise pickle.UnpicklingError(f"Global '{module}.{name}' is forbidden")
 
 
 class JsonPlusSerializer(SerializerProtocol):
@@ -255,7 +280,9 @@ class JsonPlusSerializer(SerializerProtocol):
                 data_, ext_hook=self._unpack_ext_hook, option=ormsgpack.OPT_NON_STR_KEYS
             )
         elif self.pickle_fallback and type_ == "pickle":
-            return pickle.loads(data_)
+            return _RestrictedUnpickler(
+                io.BytesIO(data_), allowed_modules=self._allowed_msgpack_modules
+            ).load()
         else:
             raise NotImplementedError(f"Unknown serialization type: {type_}")
 

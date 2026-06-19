@@ -17,6 +17,7 @@ import numpy as np
 import ormsgpack
 import pandas as pd
 import pytest
+import pickle
 from langchain_core.documents.base import Document
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, SecretStr
@@ -983,3 +984,16 @@ def test_msgpack_nested_pydantic_serializes_as_dict(
     # No blocking should occur - inner is serialized as dict, not ext
     assert "blocked" not in caplog.text.lower()
     assert result == obj
+
+def test_jsonplus_restricted_unpickler() -> None:
+    serde = JsonPlusSerializer(pickle_fallback=True, allowed_msgpack_modules=None)
+
+    class Malicious:
+        def __reduce__(self) -> tuple:
+            return (eval, ("print('Pwned!')",))
+
+    dumped = serde.dumps_typed(Malicious())
+    assert dumped[0] == "pickle"
+
+    with pytest.raises(pickle.UnpicklingError, match="Global 'builtins.eval' is forbidden"):
+        serde.loads_typed(dumped)
