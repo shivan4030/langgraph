@@ -162,6 +162,23 @@ def _provided_vals(d: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in d.items() if v is not None}
 
 
+def is_cross_origin(url: Any, location: str) -> bool:
+    from urllib.parse import urlparse
+
+    parsed_url = urlparse(str(url))
+    parsed_loc = urlparse(location)
+    if not parsed_loc.scheme and not parsed_loc.netloc:
+        return False
+    return (
+        parsed_url.scheme != parsed_loc.scheme or parsed_url.netloc != parsed_loc.netloc
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    sensitive_headers = {"x-api-key", "authorization", "cookie"}
+    return {k: v for k, v in headers.items() if k.lower() not in sensitive_headers}
+
+
 _registered_transports: list[httpx.ASGITransport] = []
 
 
