@@ -1,6 +1,7 @@
 import pytest
 
 from langgraph_sdk.encryption import DuplicateHandlerError, Encryption
+from langgraph_sdk.encryption.types import EncryptionContext
 
 
 class TestHandlerValidation:
@@ -70,3 +71,31 @@ class TestHandlerValidation:
             @encryption.encrypt.blob  # type: ignore[arg-type]
             async def wrong_params(ctx):
                 return ctx
+
+
+class TestEncryptionContext:
+    """Test EncryptionContext initialization and representation."""
+
+    def test_initialization_defaults(self):
+        """Test default values on initialization."""
+        ctx = EncryptionContext()
+        assert ctx.model is None
+        assert ctx.field is None
+        assert ctx.metadata == {}
+
+    def test_initialization_with_values(self):
+        """Test initialization with explicit values."""
+        ctx = EncryptionContext(
+            model="checkpoint", field="metadata", metadata={"tenant": "t-123"}
+        )
+        assert ctx.model == "checkpoint"
+        assert ctx.field == "metadata"
+        assert ctx.metadata == {"tenant": "t-123"}
+
+    def test_repr(self):
+        """Test the string representation."""
+        ctx = EncryptionContext(
+            model="checkpoint", field="metadata", metadata={"tenant": "t-123"}
+        )
+        expected = "EncryptionContext(model='checkpoint', field='metadata', metadata={'tenant': 't-123'})"
+        assert repr(ctx) == expected
