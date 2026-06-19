@@ -489,7 +489,7 @@ def test_serde_jsonplus_numpy_array_json_hook(arr: np.ndarray) -> None:
     ],
 )
 def test_serde_jsonplus_pandas_dataframe(df: pd.DataFrame) -> None:
-    serde = JsonPlusSerializer(pickle_fallback=True)
+    serde = JsonPlusSerializer(pickle_fallback=True, allowed_pickle_modules=True)
 
     dumped = serde.dumps_typed(df)
     assert dumped[0] == "pickle"
@@ -543,7 +543,7 @@ def test_serde_jsonplus_pandas_dataframe(df: pd.DataFrame) -> None:
     ],
 )
 def test_serde_jsonplus_pandas_series(series: pd.Series) -> None:
-    serde = JsonPlusSerializer(pickle_fallback=True)
+    serde = JsonPlusSerializer(pickle_fallback=True, allowed_pickle_modules=True)
     dumped = serde.dumps_typed(series)
 
     assert dumped[0] == "pickle"
@@ -983,3 +983,22 @@ def test_msgpack_nested_pydantic_serializes_as_dict(
     # No blocking should occur - inner is serialized as dict, not ext
     assert "blocked" not in caplog.text.lower()
     assert result == obj
+
+
+def test_serde_jsonplus_pickle_restricted() -> None:
+    serde = JsonPlusSerializer(pickle_fallback=True, allowed_pickle_modules=set())
+
+    class Evil:
+        def __reduce__(self):
+            import os
+
+            return (os.system, ('echo "Hacked!"',))
+
+    import pickle
+
+    dumped = ("pickle", pickle.dumps(Evil()))
+
+    with pytest.raises(
+        pickle.UnpicklingError, match=r"Global '.*\.system' is forbidden"
+    ):
+        serde.loads_typed(dumped)
