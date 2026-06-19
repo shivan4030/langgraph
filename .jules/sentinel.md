@@ -1,0 +1,7 @@
+## 2024-05-30 - Replace `assert` with explicit exceptions for security-critical validation
+
+**Vulnerability:** Code throughout the `langgraph` and `checkpoint` libraries used `assert` statements to validate critical conditions (e.g., verifying a cipher is "aes" in `EncryptedSerializer`, validating `task_id_checksum` in core pregel algorithm loops, and validating expected channel configurations). Because Python completely removes all `assert` statements when run with optimizations (`python -O` or the `PYTHONOPTIMIZE` environment variable), these validations would be silently bypassed in such production environments, potentially leading to insecure deserialization/encryption or broken algorithm invariants.
+
+**Learning:** It is a common Python anti-pattern to use `assert` for program control flow or data validation instead of its intended use case: catching internal logic bugs during development or in unit tests. Tools like Bandit flag this as a B101 vulnerability. The codebase was inadvertently relying on `assert` for things that must *always* be checked, regardless of the optimization level.
+
+**Prevention:** Never use `assert` for data validation, control flow, or any check that must remain active in production. Instead, use explicit `if` conditionals and raise appropriate exceptions like `ValueError` or `RuntimeError` if the condition is not met. I have patched several instances of this across `libs/checkpoint` and `libs/langgraph`.

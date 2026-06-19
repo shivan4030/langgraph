@@ -45,7 +45,8 @@ def _set_concurrent_future_state(
     source: AnyFuture,
 ) -> None:
     """Copy state from a future to a concurrent.futures.Future."""
-    assert source.done()
+    if not source.done():
+        raise RuntimeError("Source future must be done")
     if source.cancelled():
         concurrent.cancel()
     if not concurrent.set_running_or_notify_cancel():
@@ -65,7 +66,8 @@ def _copy_future_state(source: AnyFuture, dest: asyncio.Future) -> None:
     """
     if dest.done():
         return
-    assert source.done()
+    if not source.done():
+        raise RuntimeError("Source future must be done")
     if dest.cancelled():
         return
     if source.cancelled():
