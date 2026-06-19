@@ -530,6 +530,27 @@ class InMemorySaver(
 MemorySaver = InMemorySaver  # Kept for backwards compatibility
 
 
+class _SafeUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        import builtins
+        if module == "builtins" and name in {
+            "dict",
+            "list",
+            "tuple",
+            "set",
+            "int",
+            "float",
+            "str",
+            "bool",
+            "bytes",
+        }:
+            return getattr(builtins, name)
+        if module == "_codecs" and name == "encode":
+            import _codecs
+            return _codecs.encode
+        raise pickle.UnpicklingError(f"Global '{module}.{name}' is forbidden")
+
+
 class PersistentDict(defaultdict):
     """Persistent dictionary with an API compatible with shelve and anydbm.
 
@@ -591,7 +612,7 @@ class PersistentDict(defaultdict):
         if self.flag == "n":
             return
         with open(self.filename, "rb" if self.format == "pickle" else "r") as fileobj:
-            for loader in (pickle.load,):
+            for loader in (lambda f: _SafeUnpickler(f).load(),):
                 fileobj.seek(0)
                 try:
                     return self.update(loader(fileobj))
