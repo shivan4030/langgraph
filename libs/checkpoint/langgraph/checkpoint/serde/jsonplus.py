@@ -4,12 +4,14 @@ import copy
 import dataclasses
 import decimal
 import importlib
+import io
 import json
 import logging
 import pathlib
 import pickle
 import re
 import sys
+import warnings
 from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime, time, timedelta, timezone
@@ -62,6 +64,7 @@ class JsonPlusSerializer(SerializerProtocol):
         self,
         *,
         pickle_fallback: bool = False,
+        allowed_pickle_modules: Iterable[tuple[str, ...]] | Literal[True] | None = True,
         allowed_json_modules: Iterable[tuple[str, ...]] | Literal[True] | None = None,
         allowed_msgpack_modules: (
             AllowedMsgpackModules | Literal[True] | None
@@ -74,6 +77,15 @@ class JsonPlusSerializer(SerializerProtocol):
             else:
                 allowed_msgpack_modules = True
         self.pickle_fallback = pickle_fallback
+        self._allowed_pickle_modules = _normalize_allowlist(allowed_pickle_modules)
+        if pickle_fallback and self._allowed_pickle_modules is True:
+            warnings.warn(
+                "pickle_fallback is enabled without a restricted allowlist. "
+                "This could lead to arbitrary code execution if untrusted data is deserialized. "
+                "Please configure allowed_pickle_modules.",
+                UserWarning,
+                stacklevel=2,
+            )
         self._allowed_json_modules: set[tuple[str, ...]] | Literal[True] | None = (
             _normalize_allowlist(allowed_json_modules)
         )
@@ -255,7 +267,9 @@ class JsonPlusSerializer(SerializerProtocol):
                 data_, ext_hook=self._unpack_ext_hook, option=ormsgpack.OPT_NON_STR_KEYS
             )
         elif self.pickle_fallback and type_ == "pickle":
-            return pickle.loads(data_)
+            return _RestrictedUnpickler(
+                io.BytesIO(data_), self._allowed_pickle_modules
+            ).load()
         else:
             raise NotImplementedError(f"Unknown serialization type: {type_}")
 
@@ -825,3 +839,27 @@ def _normalize_module_keys(
         else:
             normalized.add(cast(tuple[str, ...], module))
     return normalized
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    def __init__(
+        self,
+        file: io.BytesIO,
+        allowed_modules: set[tuple[str, ...]] | Literal[True] | None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(file, **kwargs)
+        self.allowed_modules = allowed_modules
+
+    def find_class(self, module: str, name: str) -> Any:
+        if self.allowed_modules is True:
+            pass
+        elif (
+            self.allowed_modules is not None and (module, name) in self.allowed_modules
+        ):
+            pass
+        else:
+            raise pickle.UnpicklingError(
+                f"Global and instance '{module}.{name}' is forbidden"
+            )
+        return super().find_class(module, name)
