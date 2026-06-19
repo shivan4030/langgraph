@@ -1,0 +1,4 @@
+## 2025-02-23 - [SQL Injection via f-strings in Postgres Migrations]
+**Vulnerability:** Python f-strings were being used to construct SQL queries (`CREATE TABLE` and `SELECT`) with table names in `_get_version` inside `libs/checkpoint-postgres/langgraph/store/postgres/base.py` and `aio.py`.
+**Learning:** This occurred because table names were parameterized, which is a common pattern in internal helper functions, but standard string formatting was used instead of `psycopg.sql`. Furthermore, renaming local variables was required when fixing this because importing `sql` from `psycopg` caused a scoping issue if `sql` was also used as a local variable name in loops.
+**Prevention:** Always use `psycopg.sql` (e.g., `sql.SQL` and `sql.Identifier`) for dynamic queries in Postgres stores, and be cautious of local variable names shadowing module imports.
