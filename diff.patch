@@ -1,0 +1,55 @@
+--- libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py
++++ libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py
+@@ -3,6 +3,7 @@
+ import copy
+ import dataclasses
+ import decimal
++import io
+ import importlib
+ import json
+ import logging
+@@ -21,6 +22,7 @@
+ )
+ from typing import TYPE_CHECKING, Any, Literal, cast
+ from uuid import UUID
++import warnings
+ from zoneinfo import ZoneInfo
+
+ import ormsgpack
+@@ -40,6 +42,35 @@
+ EMPTY_BYTES = b""
+ logger = logging.getLogger(__name__)
+
++class _RestrictedUnpickler(pickle.Unpickler):
++    def __init__(
++        self,
++        file: io.BufferedReader | io.BytesIO,
++        *,
++        allowed_modules: Iterable[tuple[str, ...]] | Literal[True] | None,
++        **kwargs: Any,
++    ) -> None:
++        super().__init__(file, **kwargs)
++        self.allowed_modules = allowed_modules
++        if self.allowed_modules is True:
++            warnings.warn(
++                "Unpickling is unrestricted. This is unsafe if the data comes from an "
++                "untrusted source. Consider explicitly setting `allowed_pickle_modules` "
++                "on JsonPlusSerializer.",
++                UserWarning,
++                stacklevel=3,
++            )
++
++    def find_class(self, module: str, name: str) -> Any:
++        if self.allowed_modules is True:
++            return super().find_class(module, name)
++        if self.allowed_modules is not None:
++            parts = tuple(module.split("."))
++            for m in self.allowed_modules:
++                if parts[: len(m)] == m:
++                    return super().find_class(module, name)
++        raise pickle.UnpicklingError(
++            f"Global '{module}.{name}' is forbidden by restricted unpickler."
++        )
+
+ class JsonPlusSerializer(SerializerProtocol):
+     """Serializer that uses ormsgpack, with optional fallbacks.

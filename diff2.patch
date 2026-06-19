@@ -1,0 +1,32 @@
+--- libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py
++++ libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py
+@@ -58,14 +58,6 @@
+     ) -> None:
+         super().__init__(file, **kwargs)
+         self.allowed_modules = allowed_modules
+-        if self.allowed_modules is True:
+-            warnings.warn(
+-                "Unpickling is unrestricted. This is unsafe if the data comes from an "
+-                "untrusted source. Consider explicitly setting `allowed_pickle_modules` "
+-                "on JsonPlusSerializer.",
+-                UserWarning,
+-                stacklevel=3,
+-            )
+
+     def find_class(self, module: str, name: str) -> Any:
+         if self.allowed_modules is True:
+@@ -107,6 +99,14 @@
+             else:
+                 allowed_msgpack_modules = True
+         self.pickle_fallback = pickle_fallback
++        if self.pickle_fallback and allowed_pickle_modules is True:
++            warnings.warn(
++                "Unpickling is unrestricted. This is unsafe if the data comes from an "
++                "untrusted source. Consider explicitly setting `allowed_pickle_modules` "
++                "on JsonPlusSerializer.",
++                UserWarning,
++                stacklevel=3,
++            )
+         self._allowed_pickle_modules: set[tuple[str, ...]] | Literal[True] | None = (
+             _normalize_allowlist(allowed_pickle_modules)
+         )
