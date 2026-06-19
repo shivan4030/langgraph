@@ -38,6 +38,7 @@ from langgraph.store.base import (
 )
 from psycopg import Capabilities, Connection, Cursor, Pipeline
 from psycopg.rows import DictRow, dict_row
+from psycopg.sql import SQL, Identifier
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 from typing_extensions import TypedDict
@@ -1095,13 +1096,19 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
 
         def _get_version(cur: Cursor[dict[str, Any]], table: str) -> int:
             cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table} (
+                SQL(
+                    """
+                CREATE TABLE IF NOT EXISTS {} (
                     v INTEGER PRIMARY KEY
                 )
             """
+                ).format(Identifier(table))
             )
-            cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            cur.execute(
+                SQL("SELECT v FROM {} ORDER BY v DESC LIMIT 1").format(
+                    Identifier(table)
+                )
+            )
             row = cast(dict, cur.fetchone())
             if row is None:
                 version = -1
