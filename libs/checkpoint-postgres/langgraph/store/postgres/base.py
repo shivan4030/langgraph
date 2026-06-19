@@ -644,7 +644,7 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
         Basic setup and usage:
         ```python
         from langgraph.store.postgres import PostgresStore
-        from psycopg import Connection
+        from psycopg import sql, Connection
 
         conn_string = "postgresql://user:pass@localhost:5432/dbname"
 
@@ -1093,15 +1093,19 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
         the first time the store is used.
         """
 
-        def _get_version(cur: Cursor[dict[str, Any]], table: str) -> int:
+        def _get_version(cur: Cursor[dict[str, Any]], table_: str) -> int:
             cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table} (
+                sql.SQL("""
+                CREATE TABLE IF NOT EXISTS {} (
                     v INTEGER PRIMARY KEY
                 )
-            """
+            """).format(sql.Identifier(table_))
             )
-            cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            cur.execute(
+                sql.SQL("SELECT v FROM {} ORDER BY v DESC LIMIT 1").format(
+                    sql.Identifier(table_)
+                )
+            )
             row = cast(dict, cur.fetchone())
             if row is None:
                 version = -1
@@ -1110,7 +1114,7 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
             return version
 
         with self._cursor() as cur:
-            version = _get_version(cur, table="store_migrations")
+            version = _get_version(cur, table_="store_migrations")
             for v, sql in enumerate(self.MIGRATIONS[version + 1 :], start=version + 1):
                 try:
                     cur.execute(sql)
@@ -1122,7 +1126,7 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
                     raise
 
             if self.index_config:
-                version = _get_version(cur, table="vector_migrations")
+                version = _get_version(cur, table_="vector_migrations")
                 for v, migration in enumerate(
                     self.VECTOR_MIGRATIONS[version + 1 :], start=version + 1
                 ):

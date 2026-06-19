@@ -232,15 +232,19 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
         the first time the store is used.
         """
 
-        async def _get_version(cur: AsyncCursor[DictRow], table: str) -> int:
+        async def _get_version(cur: AsyncCursor[DictRow], table_: str) -> int:
             await cur.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {table} (
+                sql.SQL("""
+                CREATE TABLE IF NOT EXISTS {} (
                     v INTEGER PRIMARY KEY
                 )
-            """
+            """).format(sql.Identifier(table_))
             )
-            await cur.execute(f"SELECT v FROM {table} ORDER BY v DESC LIMIT 1")
+            await cur.execute(
+                sql.SQL("SELECT v FROM {} ORDER BY v DESC LIMIT 1").format(
+                    sql.Identifier(table_)
+                )
+            )
             row = cast(dict, await cur.fetchone())
             if row is None:
                 version = -1
@@ -249,13 +253,13 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
             return version
 
         async with self._cursor() as cur:
-            version = await _get_version(cur, table="store_migrations")
+            version = await _get_version(cur, table_="store_migrations")
             for v, sql in enumerate(self.MIGRATIONS[version + 1 :], start=version + 1):
                 await cur.execute(sql)
                 await cur.execute("INSERT INTO store_migrations (v) VALUES (%s)", (v,))
 
             if self.index_config:
-                version = await _get_version(cur, table="vector_migrations")
+                version = await _get_version(cur, table_="vector_migrations")
                 for v, migration in enumerate(
                     self.VECTOR_MIGRATIONS[version + 1 :], start=version + 1
                 ):
