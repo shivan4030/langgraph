@@ -1,0 +1,4 @@
+## 2025-06-02 - Unrestricted Pickle Deserialization in JsonPlusSerializer
+**Vulnerability:** Arbitrary code execution vulnerability in `JsonPlusSerializer` via `pickle.loads` when `pickle_fallback` is enabled.
+**Learning:** `JsonPlusSerializer` defaults `pickle_fallback` to `False`, but when enabled, it allowed unrestricted object instantiation. A `_RestrictedUnpickler` was implemented to introduce a module allowlist (`allowed_pickle_modules`) that correctly secures unpickling operations while keeping `True` as the backward-compatible default, emitting a `UserWarning` to alert developers of the risk.
+**Prevention:** Avoid unrestricted `pickle.loads` or `pickle.Unpickler().load()`. Always use an unpickler that restricts imported modules by overriding `find_class` when dealing with potentially untrusted serialized data.
