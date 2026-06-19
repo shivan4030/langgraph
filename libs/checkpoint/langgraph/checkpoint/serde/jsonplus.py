@@ -62,12 +62,17 @@ class JsonPlusSerializer(SerializerProtocol):
         self,
         *,
         pickle_fallback: bool = False,
+        allowed_pickle_modules: Iterable[tuple[str, ...]] | Literal[True] | None = None,
         allowed_json_modules: Iterable[tuple[str, ...]] | Literal[True] | None = None,
         allowed_msgpack_modules: (
             AllowedMsgpackModules | Literal[True] | None
         ) = _lg_msgpack._SENTINEL,
         __unpack_ext_hook__: Callable[[int, bytes], Any] | None = None,
     ) -> None:
+        if allowed_pickle_modules is None:
+            self._allowed_pickle_modules = _lg_msgpack.SAFE_MSGPACK_TYPES
+        else:
+            self._allowed_pickle_modules = _normalize_allowlist(allowed_pickle_modules)
         if allowed_msgpack_modules is _lg_msgpack._SENTINEL:
             if _lg_msgpack.STRICT_MSGPACK_ENABLED:
                 allowed_msgpack_modules = None
@@ -255,9 +260,26 @@ class JsonPlusSerializer(SerializerProtocol):
                 data_, ext_hook=self._unpack_ext_hook, option=ormsgpack.OPT_NON_STR_KEYS
             )
         elif self.pickle_fallback and type_ == "pickle":
-            return pickle.loads(data_)
+            import io
+
+            return _RestrictedUnpickler(
+                io.BytesIO(data_), self._allowed_pickle_modules
+            ).load()
         else:
             raise NotImplementedError(f"Unknown serialization type: {type_}")
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    def __init__(self, file, allowed_modules):
+        super().__init__(file)
+        self.allowed_modules = allowed_modules
+
+    def find_class(self, module: str, name: str):
+        if self.allowed_modules is True:
+            return super().find_class(module, name)
+        if self.allowed_modules is not None and (module, name) in self.allowed_modules:
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(f"Global '{module}.{name}' is forbidden")
 
 
 # --- msgpack ---
