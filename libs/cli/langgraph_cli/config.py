@@ -2,6 +2,7 @@ import copy
 import json
 import os
 import pathlib
+from typing import Any
 import re
 import textwrap
 from collections import Counter
@@ -102,6 +103,11 @@ RUN PYTHONDONTWRITEBYTECODE=1 {install_cmd} --no-cache-dir --no-deps -e /api
                 "RUN rm /usr/bin/uv /usr/bin/uvx\n# -- End of build deps removal --"
             )
     return "\n".join(commands)
+
+
+def _escape_env(val: Any) -> str:
+    """Serialize to JSON and escape single quotes for use in Dockerfile single-quoted ENV values."""
+    return json.dumps(val).replace("'", r"'\''")
 
 
 def _parse_version(version_str: str) -> tuple[int, int]:

@@ -1,0 +1,4 @@
+## 2024-05-14 - [Critical] Dockerfile ENV Variable Single Quote Injection
+**Vulnerability:** A script injection vulnerability existed in Dockerfile generation via single-quote escaping in the ENV parameters (e.g., `ENV LANGGRAPH_STORE='{"foo": "bar'baz"}'` unescaped could break out of the single-quoted string context).
+**Learning:** `json.dumps()` correctly formats JSON values but doesn't escape single quotes. When the results are placed within single-quoted string commands (like Dockerfile ENV assignments), a single quote inside the JSON breaks out of the shell string context, permitting shell command injection.
+**Prevention:** Whenever embedding `json.dumps()` output inside a single-quoted context like a shell script or Dockerfile directive, securely escape single quotes using string replacements such as `json.dumps(val).replace("'", r"'\''")`.
