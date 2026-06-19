@@ -299,9 +299,9 @@ class BaseSqliteStore:
             query = "DELETE FROM store WHERE prefix = ? AND key = ?"
             queries.append((query, params, True))
 
-        embedding_request: tuple[str, Sequence[tuple[str, str, str, str]], bool] | None = (
-            None
-        )
+        embedding_request: (
+            tuple[str, Sequence[tuple[str, str, str, str]], bool] | None
+        ) = None
         if inserts:
             insertion_params = []
             embedding_request_params = []
