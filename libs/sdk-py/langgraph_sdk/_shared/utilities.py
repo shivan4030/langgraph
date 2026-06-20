@@ -180,3 +180,28 @@ def get_asgi_transport() -> type[httpx.ASGITransport]:
     except ImportError:
         # Older versions of the server
         return httpx.ASGITransport
+
+
+def is_cross_origin(request_url: httpx.URL | str, location: str) -> bool:
+    from urllib.parse import urlparse
+    parsed_req = urlparse(str(request_url))
+    parsed_loc = urlparse(location)
+
+    # If the location is a relative URL, it's not cross-origin
+    if not parsed_loc.netloc:
+        return False
+
+    return (
+        parsed_loc.scheme != parsed_req.scheme or
+        parsed_loc.netloc != parsed_req.netloc
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    sensitive_headers = {
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "x-api-key",
+    }
+    return {k: v for k, v in headers.items() if k.lower() not in sensitive_headers}

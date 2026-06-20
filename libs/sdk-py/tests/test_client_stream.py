@@ -290,6 +290,156 @@ async def test_http_client_stream_recovers_after_disconnect():
     ]
 
 
+def test_sync_http_client_stream_recovers_after_disconnect_cross_origin():
+    reconnect_path = "https://other.com/reconnect"
+    first_chunks = [
+        b"id: 1\n",
+        b"event: values\n",
+        b'data: {"step": 1}\n\n',
+    ]
+    second_chunks = [
+        b"id: 2\n",
+        b"event: values\n",
+        b'data: {"step": 2}\n\n',
+        b"event: end\n",
+        b"data: null\n\n",
+    ]
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            assert request.method == "POST"
+            assert request.url.path == "/stream"
+            assert request.headers["accept"] == "text/event-stream"
+            assert request.headers["cache-control"] == "no-store"
+            assert request.headers["x-api-key"] == "secret"
+            assert "last-event-id" not in {
+                k.lower(): v for k, v in request.headers.items()
+            }
+            assert request.read()
+            return httpx.Response(
+                200,
+                headers={
+                    "Content-Type": "text/event-stream",
+                    "Location": reconnect_path,
+                },
+                stream=ListByteStream(
+                    first_chunks,
+                    httpx.RemoteProtocolError("incomplete chunked read"),
+                ),
+            )
+        if call_count == 2:
+            assert request.method == "GET"
+            assert str(request.url) == reconnect_path
+            assert request.headers["Last-Event-ID"] == "1"
+            assert "x-api-key" not in {k.lower(): v for k, v in request.headers.items()}
+            assert request.read() == b""
+            return httpx.Response(
+                200,
+                headers={"Content-Type": "text/event-stream"},
+                stream=ListByteStream(second_chunks),
+            )
+        raise AssertionError("unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport, base_url="https://example.com") as client:
+        http_client = SyncHttpClient(client)
+        parts = list(
+            http_client.stream(
+                "/stream",
+                "POST",
+                json={"payload": "value"},
+                headers={"x-api-key": "secret"},
+            )
+        )
+
+    assert call_count == 2
+    assert parts == [
+        StreamPart(event="values", data={"step": 1}, id="1"),
+        StreamPart(event="values", data={"step": 2}, id="2"),
+        StreamPart(event="end", data=None, id="2"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_http_client_stream_recovers_after_disconnect_cross_origin():
+    reconnect_path = "https://other.com/reconnect"
+    first_chunks = [
+        b"id: 1\n",
+        b"event: values\n",
+        b'data: {"step": 1}\n\n',
+    ]
+    second_chunks = [
+        b"id: 2\n",
+        b"event: values\n",
+        b'data: {"step": 2}\n\n',
+        b"event: end\n",
+        b"data: null\n\n",
+    ]
+    call_count = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            assert request.method == "POST"
+            assert request.url.path == "/stream"
+            assert request.headers["accept"] == "text/event-stream"
+            assert request.headers["cache-control"] == "no-store"
+            assert request.headers["x-api-key"] == "secret"
+            assert "last-event-id" not in {
+                k.lower(): v for k, v in request.headers.items()
+            }
+            assert await request.aread()
+            return httpx.Response(
+                200,
+                headers={
+                    "Content-Type": "text/event-stream",
+                    "Location": reconnect_path,
+                },
+                stream=AsyncListByteStream(
+                    first_chunks,
+                    httpx.RemoteProtocolError("incomplete chunked read"),
+                ),
+            )
+        if call_count == 2:
+            assert request.method == "GET"
+            assert str(request.url) == reconnect_path
+            assert request.headers["Last-Event-ID"] == "1"
+            assert "x-api-key" not in {k.lower(): v for k, v in request.headers.items()}
+            assert await request.aread() == b""
+            return httpx.Response(
+                200,
+                headers={"Content-Type": "text/event-stream"},
+                stream=AsyncListByteStream(second_chunks),
+            )
+        raise AssertionError("unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="https://example.com"
+    ) as client:
+        http_client = HttpClient(client)
+        parts = [
+            part
+            async for part in http_client.stream(
+                "/stream",
+                "POST",
+                json={"payload": "value"},
+                headers={"x-api-key": "secret"},
+            )
+        ]
+
+    assert call_count == 2
+    assert parts == [
+        StreamPart(event="values", data={"step": 1}, id="1"),
+        StreamPart(event="values", data={"step": 2}, id="2"),
+        StreamPart(event="end", data=None, id="2"),
+    ]
+
+
 # --- _sse_to_v2_dict conversion ---
 
 
