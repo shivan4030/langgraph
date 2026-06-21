@@ -87,6 +87,7 @@ def test_msgpack_method_pathlib_blocked_encrypted_strict(
     serde = EncryptedSerializer(
         _PassthroughCipher(),
         JsonPlusSerializer(allowed_msgpack_modules=None),
+        fallback_to_unencrypted=True,
     )
 
     caplog.set_level(logging.WARNING, logger="langgraph.checkpoint.serde.jsonplus")
@@ -402,7 +403,10 @@ class TestEncryptedSerializerUnencryptedFallback:
     def test_loads_unencrypted_data(self) -> None:
         """EncryptedSerializer should handle unencrypted data for backwards compat."""
         plain = JsonPlusSerializer(allowed_msgpack_modules=None)
-        encrypted = _make_encrypted_serde(allowed_msgpack_modules=None)
+        encrypted = EncryptedSerializer(
+            _PassthroughCipher(),
+            JsonPlusSerializer(allowed_msgpack_modules=None),
+        )
 
         obj = {"key": "value", "number": 42}
 
