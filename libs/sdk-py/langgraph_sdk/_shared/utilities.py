@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import urllib.parse
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
@@ -45,6 +46,24 @@ def _get_api_key(api_key: str | None = NOT_PROVIDED) -> str | None:
                 return env.strip().strip('"').strip("'")
     # api_key is explicitly None, don't load from environment
     return None
+
+
+def is_cross_origin(url: str, location: str) -> bool:
+    """Check if the given location is cross-origin to the original URL."""
+    parsed_url = urllib.parse.urlparse(url)
+    parsed_loc = urllib.parse.urlparse(location)
+    if not parsed_loc.netloc:
+        return False
+    return (parsed_url.scheme, parsed_url.netloc) != (
+        parsed_loc.scheme,
+        parsed_loc.netloc,
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Strip sensitive headers (like auth/cookies) to prevent leakage."""
+    sensitive_headers = {"authorization", "cookie", "proxy-authorization", "x-api-key"}
+    return {k: v for k, v in headers.items() if k.lower() not in sensitive_headers}
 
 
 def _get_headers(
