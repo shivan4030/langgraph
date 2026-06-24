@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import urllib.parse
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
@@ -180,3 +181,18 @@ def get_asgi_transport() -> type[httpx.ASGITransport]:
     except ImportError:
         # Older versions of the server
         return httpx.ASGITransport
+
+
+def is_cross_origin(url1: str | httpx.URL, url2: str | httpx.URL) -> bool:
+    """Check if a redirect to url2 from url1 is cross-origin."""
+    u1 = urllib.parse.urlparse(str(url1))
+    u2 = urllib.parse.urlparse(str(url2))
+    if not u2.netloc:
+        return False
+    return (u1.scheme, u1.netloc) != (u2.scheme, u2.netloc)
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Strip sensitive headers (like x-api-key) when redirecting cross-origin."""
+    sensitive = {"x-api-key", "authorization", "cookie"}
+    return {k: v for k, v in headers.items() if k.lower() not in sensitive}
