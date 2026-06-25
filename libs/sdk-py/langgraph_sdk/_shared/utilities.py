@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import urllib.parse
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
@@ -160,6 +161,41 @@ def _resolve_timezone(tz: str | tzinfo | ZoneInfo | None) -> str | None:
 
 def _provided_vals(d: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in d.items() if v is not None}
+
+
+def is_cross_origin(original_url: str, new_url: str) -> bool:
+    """Check if the new URL is a cross-origin redirect."""
+    original = urllib.parse.urlparse(original_url)
+    new = urllib.parse.urlparse(new_url)
+
+    if not new.netloc:
+        return False
+
+    def _normalize_netloc(parsed: urllib.parse.ParseResult) -> str:
+        netloc = parsed.netloc
+        if parsed.scheme == "http" and netloc.endswith(":80"):
+            netloc = netloc[:-3]
+        elif parsed.scheme == "https" and netloc.endswith(":443"):
+            netloc = netloc[:-4]
+        return netloc
+
+    return (
+        _normalize_netloc(original) != _normalize_netloc(new)
+        or original.scheme != new.scheme
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Strip sensitive headers like API keys."""
+    stripped = dict(headers)
+    # Also strip Authorization and Cookie headers just in case
+    for header in ["x-api-key", "authorization", "cookie"]:
+        stripped.pop(header, None)
+        # Check case-insensitively
+        for k in list(stripped.keys()):
+            if k.lower() == header:
+                del stripped[k]
+    return stripped
 
 
 _registered_transports: list[httpx.ASGITransport] = []
