@@ -11,7 +11,11 @@ from typing import Any, cast
 import httpx
 import orjson
 
-from langgraph_sdk._shared.utilities import _orjson_default
+from langgraph_sdk._shared.utilities import (
+    _orjson_default,
+    is_cross_origin,
+    strip_sensitive_headers,
+)
 from langgraph_sdk.errors import _raise_for_status_typed
 from langgraph_sdk.schema import QueryParamTypes, StreamPart
 from langgraph_sdk.sse import SSEDecoder, iter_lines_raw
@@ -172,10 +176,15 @@ class SyncHttpClient:
                     stacklevel=2,
                 )
                 r.close()
+
+                redirect_headers = request_headers
+                if is_cross_origin(str(r.request.url), loc):
+                    redirect_headers = strip_sensitive_headers(request_headers)
+
                 return self.request_reconnect(
                     loc,
                     "GET",
-                    headers=request_headers,
+                    headers=redirect_headers,
                     # don't pass on_response so it's only called once
                     reconnect_limit=reconnect_limit - 1,
                 )
@@ -212,9 +221,15 @@ class SyncHttpClient:
         max_reconnect_attempts = 5
 
         while True:
-            current_headers = dict(
-                request_headers if reconnect_path is None else reconnect_headers
-            )
+            if reconnect_path is None:
+                current_headers = dict(request_headers)
+            else:
+                if is_cross_origin(
+                    str(self.client.base_url.join(path)), reconnect_path
+                ):
+                    current_headers = strip_sensitive_headers(reconnect_headers)
+                else:
+                    current_headers = dict(reconnect_headers)
             if last_event_id is not None:
                 current_headers["Last-Event-ID"] = last_event_id
 
