@@ -12,7 +12,11 @@ from typing import Any, cast
 import httpx
 import orjson
 
-from langgraph_sdk._shared.utilities import _orjson_default
+from langgraph_sdk._shared.utilities import (
+    _orjson_default,
+    is_cross_origin,
+    strip_sensitive_headers,
+)
 from langgraph_sdk.errors import _araise_for_status_typed
 from langgraph_sdk.schema import QueryParamTypes, StreamPart
 from langgraph_sdk.sse import SSEDecoder, aiter_lines_raw
@@ -171,6 +175,11 @@ class HttpClient:
                     f"Request failed, attempting reconnect to Location: {loc}",
                     stacklevel=2,
                 )
+
+                # Check for cross-origin redirect and strip sensitive headers if necessary
+                if is_cross_origin(r.url, loc):
+                    request_headers = strip_sensitive_headers(request_headers)
+
                 await r.aclose()
                 return await self.request_reconnect(
                     loc,
@@ -243,6 +252,8 @@ class HttpClient:
                 reconnect_location = res.headers.get("location")
                 if reconnect_location:
                     reconnect_path = reconnect_location
+                    if is_cross_origin(res.url, reconnect_location):
+                        reconnect_headers = strip_sensitive_headers(reconnect_headers)
 
                 # parse SSE
                 decoder = SSEDecoder()
