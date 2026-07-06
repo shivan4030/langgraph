@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import urllib.parse
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
@@ -20,6 +21,27 @@ if TYPE_CHECKING:
 RESERVED_HEADERS = ("x-api-key",)
 
 NOT_PROVIDED = cast(None, object())
+
+
+def is_cross_origin(base_url: str | httpx.URL, redirect_url: str | httpx.URL) -> bool:
+    """Check if the redirect URL is on a different origin than the base URL."""
+    parsed_base = urllib.parse.urlparse(str(base_url))
+    parsed_redirect = urllib.parse.urlparse(str(redirect_url))
+
+    # If the redirect URL is relative, it's not cross-origin
+    if not parsed_redirect.scheme and not parsed_redirect.netloc:
+        return False
+
+    return not (
+        parsed_base.scheme == parsed_redirect.scheme
+        and parsed_base.netloc == parsed_redirect.netloc
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Remove sensitive headers (like x-api-key) when following cross-origin redirects."""
+    sensitive_headers = {"x-api-key", "authorization"}
+    return {k: v for k, v in headers.items() if k.lower() not in sensitive_headers}
 
 
 def _get_api_key(api_key: str | None = NOT_PROVIDED) -> str | None:
