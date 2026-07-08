@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import urllib.parse
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
@@ -20,6 +21,26 @@ if TYPE_CHECKING:
 RESERVED_HEADERS = ("x-api-key",)
 
 NOT_PROVIDED = cast(None, object())
+
+
+def is_cross_origin(url: str | httpx.URL, location: str) -> bool:
+    """Check if the given location is cross-origin relative to the base URL."""
+    parsed_url = urllib.parse.urlparse(str(url))
+    parsed_location = urllib.parse.urlparse(location)
+
+    if not parsed_location.netloc:
+        return False
+
+    return (
+        parsed_url.scheme != parsed_location.scheme
+        or parsed_url.netloc != parsed_location.netloc
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Remove sensitive headers like Authorization or API keys for cross-origin requests."""
+    sensitive = {"authorization", "x-api-key", "cookie"}
+    return {k: v for k, v in headers.items() if k.lower() not in sensitive}
 
 
 def _get_api_key(api_key: str | None = NOT_PROVIDED) -> str | None:
