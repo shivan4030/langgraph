@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import urllib.parse
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
@@ -160,6 +161,34 @@ def _resolve_timezone(tz: str | tzinfo | ZoneInfo | None) -> str | None:
 
 def _provided_vals(d: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in d.items() if v is not None}
+
+
+def is_cross_origin(url1: str, url2: str) -> bool:
+    """Check if two URLs are cross-origin."""
+    u1 = urllib.parse.urlparse(url1)
+    u2 = urllib.parse.urlparse(url2)
+    if not u1.netloc or not u2.netloc:
+        return False
+    return (u1.scheme != u2.scheme) or (u1.netloc != u2.netloc)
+
+
+def strip_sensitive_headers(
+    headers: dict[str, str], original_url: str, new_url: str
+) -> dict[str, str]:
+    """Strip sensitive headers if the redirect is cross-origin."""
+    if not is_cross_origin(original_url, new_url):
+        return headers
+
+    stripped = {}
+    for k, v in headers.items():
+        if k.lower() not in (
+            "authorization",
+            "x-api-key",
+            "cookie",
+            "proxy-authorization",
+        ):
+            stripped[k] = v
+    return stripped
 
 
 _registered_transports: list[httpx.ASGITransport] = []
