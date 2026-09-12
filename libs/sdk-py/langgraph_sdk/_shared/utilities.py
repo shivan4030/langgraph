@@ -8,6 +8,7 @@ import re
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlparse
 
 import httpx
 
@@ -160,6 +161,31 @@ def _resolve_timezone(tz: str | tzinfo | ZoneInfo | None) -> str | None:
 
 def _provided_vals(d: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in d.items() if v is not None}
+
+
+def is_cross_origin(url: str, base_url: str | httpx.URL) -> bool:
+    """Check if a URL is cross-origin relative to a base URL."""
+    parsed_url = urlparse(str(url))
+    if not parsed_url.netloc:
+        return False
+    parsed_base = urlparse(str(base_url))
+    return (
+        parsed_url.scheme != parsed_base.scheme
+        or parsed_url.netloc != parsed_base.netloc
+    )
+
+
+def strip_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Strip sensitive headers from a dictionary of headers."""
+    # List based on httpx's cross-origin header stripping logic
+    # httpx/_client.py:
+    # return [
+    #     header for header, value in headers.multi_items()
+    #     if header.lower() not in (b"authorization", b"cookie", b"proxy-authorization")
+    # ]
+    # We also add x-api-key just in case.
+    sensitive = {"authorization", "cookie", "proxy-authorization", "x-api-key"}
+    return {k: v for k, v in headers.items() if k.lower() not in sensitive}
 
 
 _registered_transports: list[httpx.ASGITransport] = []
