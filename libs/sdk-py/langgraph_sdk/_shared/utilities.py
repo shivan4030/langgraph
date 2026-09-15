@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import urllib.parse
 from collections.abc import Mapping
 from datetime import tzinfo
 from typing import TYPE_CHECKING, Any, cast
@@ -163,6 +164,30 @@ def _provided_vals(d: Mapping[str, Any]) -> dict[str, Any]:
 
 
 _registered_transports: list[httpx.ASGITransport] = []
+
+
+def is_cross_origin(url1: str, url2: str) -> bool:
+    """Check if two URLs have different origins."""
+    parsed1 = urllib.parse.urlparse(url1)
+    parsed2 = urllib.parse.urlparse(url2)
+
+    # If either URL is relative, they share the same origin
+    if not parsed1.netloc or not parsed2.netloc:
+        return False
+
+    return parsed1.scheme != parsed2.scheme or parsed1.netloc != parsed2.netloc
+
+
+def strip_sensitive_headers(headers: dict[str, Any] | None) -> None:
+    """Remove sensitive headers like authentication and cookies."""
+    if not headers:
+        return
+    sensitive_headers = {"authorization", "cookie", "x-api-key"}
+    # Use list(headers.keys()) to avoid RuntimeError (dictionary changed size during iteration)
+    # and compare case-insensitively
+    for header in list(headers.keys()):
+        if header.lower() in sensitive_headers:
+            headers.pop(header, None)
 
 
 # Do not move; this is used in the server.

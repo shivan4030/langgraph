@@ -12,7 +12,11 @@ from typing import Any, cast
 import httpx
 import orjson
 
-from langgraph_sdk._shared.utilities import _orjson_default
+from langgraph_sdk._shared.utilities import (
+    _orjson_default,
+    is_cross_origin,
+    strip_sensitive_headers,
+)
 from langgraph_sdk.errors import _araise_for_status_typed
 from langgraph_sdk.schema import QueryParamTypes, StreamPart
 from langgraph_sdk.sse import SSEDecoder, aiter_lines_raw
@@ -172,6 +176,12 @@ class HttpClient:
                     stacklevel=2,
                 )
                 await r.aclose()
+
+                # Strip sensitive headers if reconnecting to a different origin
+                if is_cross_origin(str(r.url), loc):
+                    request_headers = dict(request_headers) if request_headers else {}
+                    strip_sensitive_headers(request_headers)
+
                 return await self.request_reconnect(
                     loc,
                     "GET",
@@ -221,6 +231,14 @@ class HttpClient:
             current_params = params if reconnect_path is None else None
 
             retry = False
+
+            # Strip sensitive headers if reconnecting to a different origin
+            if reconnect_path is not None and is_cross_origin(
+                str(self.client.base_url.join(path)), reconnect_path
+            ):
+                current_headers = dict(current_headers) if current_headers else {}
+                strip_sensitive_headers(current_headers)
+
             async with self.client.stream(
                 current_method,
                 reconnect_path or path,
