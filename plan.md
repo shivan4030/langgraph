@@ -1,0 +1,5 @@
+1. **Modify `jsonplus.py`**: Edit `libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py` to add the `_RestrictedUnpickler` class, update `JsonPlusSerializer.__init__` to accept `allowed_pickle_modules`, emit a `UserWarning` if `pickle_fallback=True` and `allowed_pickle_modules=True`, and modify `loads_typed` to use `_RestrictedUnpickler` instead of `pickle.loads`.
+2. **Modify `test_jsonplus.py`**: Edit `libs/checkpoint/tests/test_jsonplus.py` to add a specific test function `test_pickle_fallback_warning` that asserts a `UserWarning` is raised when `pickle_fallback=True` and `allowed_pickle_modules=True`. Also add a specific test function `test_restricted_unpickler` that asserts `pickle.UnpicklingError` is raised when an unauthorized module is unpickled.
+3. **Run tests**: Run the test suite (e.g., `cd libs/checkpoint && uv run pytest`) to ensure the changes are correct and have not introduced regressions.
+4. Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+5. **Submit Change**: Commit and submit the fix.

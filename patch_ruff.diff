@@ -1,0 +1,10 @@
+--- libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py
++++ libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py
+@@ -97,6 +97,7 @@
+                 "This allows arbitrary code execution during deserialization. "
+                 "Please restrict the allowlist.",
+                 UserWarning,
++                stacklevel=2,
+             )
+         self._allowed_json_modules: set[tuple[str, ...]] | Literal[True] | None = (
+             _normalize_allowlist(allowed_json_modules)
