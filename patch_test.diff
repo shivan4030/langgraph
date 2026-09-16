@@ -1,0 +1,33 @@
+--- libs/checkpoint/tests/test_jsonplus.py
++++ libs/checkpoint/tests/test_jsonplus.py
+@@ -1014,3 +1014,30 @@
+     assert "blocked" not in caplog.text.lower()
+     # Dict values shouldn't be cast down to dataclass
+     assert isinstance(result.foo.bar, dict)
++
++def test_pickle_fallback_warning() -> None:
++    import warnings
++    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
++
++    with warnings.catch_warnings(record=True) as w:
++        warnings.simplefilter("always")
++        JsonPlusSerializer(pickle_fallback=True)
++
++        assert len(w) == 1
++        assert issubclass(w[-1].category, UserWarning)
++        assert "pickle_fallback is enabled and allowed_pickle_modules is True" in str(w[-1].message)
++
++def test_restricted_unpickler() -> None:
++    import io
++    import os
++    import pickle
++    from langgraph.checkpoint.serde.jsonplus import _RestrictedUnpickler
++    import pytest
++
++    data = pickle.dumps(os.system)
++
++    unpickler = _RestrictedUnpickler(io.BytesIO(data), allowed_modules={("os",)})
++    assert unpickler.load() == os.system
++
++    with pytest.raises(pickle.UnpicklingError, match="Global 'posix.system' is forbidden|Global 'nt.system' is forbidden|Global 'os.system' is forbidden"):
++        _RestrictedUnpickler(io.BytesIO(data), allowed_modules={("app",)}).load()

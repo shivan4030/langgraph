@@ -1,0 +1,14 @@
+--- libs/checkpoint/tests/test_jsonplus.py
++++ libs/checkpoint/tests/test_jsonplus.py
+@@ -1015,9 +1015,7 @@
+     data = pickle.dumps(os.system)
+
+     # Depending on the system, os.system is actually posix.system or nt.system
+-    assert (
+-        _RestrictedUnpickler(io.BytesIO(data), allowed_modules={("os",)}).load()
+-        == os.system
+-    )
++    allowed = {("posix",), ("nt",), ("os",)}
++    assert _RestrictedUnpickler(io.BytesIO(data), allowed_modules=allowed).load() == os.system
+
+     # We allow everything to show find_class correctly falls back

@@ -1,0 +1,15 @@
+--- libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py
++++ libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py
+@@ -52,10 +52,10 @@
+     def __init__(
+         self,
+         *args: Any,
+-        allowed_modules: set[tuple[str, ...]] | Literal[True],
++        allowed_modules: set[tuple[str, ...]] | Literal[True] | None,
+         **kwargs: Any,
+     ) -> None:
+         super().__init__(*args, **kwargs)
+-        self.allowed_modules = allowed_modules
++        self.allowed_modules = allowed_modules if allowed_modules is not None else set()
+
+     def find_class(self, module: str, name: str) -> Any:

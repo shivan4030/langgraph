@@ -983,3 +983,48 @@ def test_msgpack_nested_pydantic_serializes_as_dict(
     # No blocking should occur - inner is serialized as dict, not ext
     assert "blocked" not in caplog.text.lower()
     assert result == obj
+
+
+def test_pickle_fallback_warning() -> None:
+    import warnings
+
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        JsonPlusSerializer(pickle_fallback=True)
+
+        assert len(w) == 1
+        assert issubclass(w[-1].category, UserWarning)
+        assert "pickle_fallback is enabled and allowed_pickle_modules is True" in str(
+            w[-1].message
+        )
+
+
+def test_restricted_unpickler() -> None:
+    import io
+    import os
+    import pickle
+
+    import pytest
+
+    from langgraph.checkpoint.serde.jsonplus import _RestrictedUnpickler
+
+    data = pickle.dumps(os.system)
+
+    # Depending on the system, os.system is actually posix.system or nt.system
+    allowed = {("posix",), ("nt",), ("os",)}
+    assert (
+        _RestrictedUnpickler(io.BytesIO(data), allowed_modules=allowed).load()
+        == os.system
+    )
+
+    # We allow everything to show find_class correctly falls back
+    unpickler_allow_all = _RestrictedUnpickler(io.BytesIO(data), allowed_modules=True)
+    assert unpickler_allow_all.load() == os.system
+
+    with pytest.raises(
+        pickle.UnpicklingError,
+        match="Global 'posix.system' is forbidden|Global 'nt.system' is forbidden|Global 'os.system' is forbidden",
+    ):
+        _RestrictedUnpickler(io.BytesIO(data), allowed_modules={("app",)}).load()
